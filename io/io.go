@@ -33,6 +33,7 @@ func GetInstance() Instance {
 	return instance
 }
 
+// Run will start the Cycle from read and write from I/O
 func (io *io) Run() {
 	go func(ch chan expr) {
 		reader := bufio.NewReader(os.Stdin)
