@@ -6,7 +6,7 @@ import (
 )
 
 // Parse will transform a string into a list of expressions
-func Parse(code string) *list.List {
+func parse(code string) *list.List {
 	exprs := list.New()
 	lines := strings.Split(code, ";")
 
@@ -14,11 +14,14 @@ func Parse(code string) *list.List {
 		commaReplaced := strings.Replace(line, ",", " ", -1)
 		values := strings.Fields(commaReplaced)
 
-		action := values[0]
-		params := values[1:len(values)]
+		if len(values) > 1 {
+			action := values[0]
+			params := values[1:len(values)]
 
-		expr := encode(action, params)
-		exprs.PushBack(expr)
+			expr := encode(action, params)
+			exprs.PushBack(expr)
+		}
+
 	}
 
 	return exprs
