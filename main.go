@@ -1,7 +1,10 @@
 package main
 
-import "fmt"
+import (
+	"github.com/bruunoromero/cpu-emulator/io"
+)
 
 func main() {
-	fmt.Println("ola mundo")
+	ioInstance := io.GetInstance()
+	ioInstance.Run()
 }
