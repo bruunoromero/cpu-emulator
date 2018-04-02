@@ -5,7 +5,7 @@ import (
 )
 
 // Expr is the type of a expression for the cpu
-type Expr struct {
+type expr struct {
 	Action int
 	Params []string
 }
@@ -25,8 +25,8 @@ var actions = map[string]int{
 	"imul": Imul,
 }
 
-func encode(action string, params []string) Expr {
-	return Expr{Action: getAction(action), Params: params}
+func encode(action string, params []string) expr {
+	return expr{Action: getAction(action), Params: params}
 }
 
 func getAction(action string) int {

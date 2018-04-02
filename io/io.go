@@ -9,7 +9,7 @@ import (
 )
 
 type io struct {
-	read  chan Expr
+	read  chan expr
 	write <-chan string
 }
 
@@ -26,7 +26,7 @@ var once sync.Once
 func GetInstance() Instance {
 	once.Do(func() {
 		instance = &io{
-			read: make(chan Expr),
+			read: make(chan expr),
 		}
 	})
 
@@ -34,7 +34,7 @@ func GetInstance() Instance {
 }
 
 func (io *io) Run() {
-	go func(ch chan Expr) {
+	go func(ch chan expr) {
 		reader := bufio.NewReader(os.Stdin)
 		for {
 			s, err := reader.ReadString('\n')
@@ -46,8 +46,8 @@ func (io *io) Run() {
 
 			exprs := parse(s)
 
-			for expr := exprs.Front(); expr != nil; expr = expr.Next() {
-				ch <- expr.Value.(Expr)
+			for _, expr := range exprs {
+				ch <- expr
 			}
 		}
 		close(ch)

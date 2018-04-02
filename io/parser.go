@@ -1,13 +1,12 @@
 package io
 
 import (
-	"container/list"
 	"strings"
 )
 
 // Parse will transform a string into a list of expressions
-func parse(code string) *list.List {
-	exprs := list.New()
+func parse(code string) []expr {
+	var exprs []expr
 	lines := strings.Split(code, ";")
 
 	for _, line := range lines {
@@ -19,7 +18,7 @@ func parse(code string) *list.List {
 			params := values[1:len(values)]
 
 			expr := encode(action, params)
-			exprs.PushBack(expr)
+			exprs = append(exprs, expr)
 		}
 
 	}
