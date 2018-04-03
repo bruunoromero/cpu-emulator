@@ -9,13 +9,14 @@ import (
 )
 
 type io struct {
-	read  chan expr
-	write <-chan string
+	length int
+	read   chan expr
+	write  <-chan string
 }
 
 // Instance is the interface of the io singleton
 type Instance interface {
-	Run()
+	Run(int)
 	private()
 }
 
@@ -34,7 +35,9 @@ func GetInstance() Instance {
 }
 
 // Run will start the Cycle from read and write from I/O
-func (io *io) Run() {
+func (io *io) Run(length int) {
+	instance.length = length
+
 	go func(ch chan expr) {
 		reader := bufio.NewReader(os.Stdin)
 		for {

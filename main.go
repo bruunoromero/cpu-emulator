@@ -5,6 +5,6 @@ import (
 )
 
 func main() {
-	ioInstance := io.GetInstance()
+	ioInstance := io.GetInstance(10)
 	ioInstance.Run()
 }
