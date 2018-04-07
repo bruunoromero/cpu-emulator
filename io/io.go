@@ -2,43 +2,33 @@ package io
 
 import (
 	"bufio"
-	"fmt"
 	"os"
-	"sync"
-	"time"
+
+	"github.com/bruunoromero/cpu-emulator/bus"
 )
 
 type io struct {
-	length int
-	read   chan expr
-	write  <-chan string
+	encoder encoder
+	read    chan []int
+	write   <-chan string
 }
 
-// Instance is the interface of the io singleton
+// Instance is the interface of the io type
 type Instance interface {
-	Run(int)
-	private()
+	Run(bus.Instance)
 }
 
-var instance *io
-var once sync.Once
-
-// GetInstance returns a new instance of the I/O Module
-func GetInstance() Instance {
-	once.Do(func() {
-		instance = &io{
-			read: make(chan expr),
-		}
-	})
-
-	return instance
+// New returns a new instance of the I/O Module
+func New(registers []string) Instance {
+	return &io{
+		read:    make(chan []int),
+		encoder: newEncoder(registers),
+	}
 }
 
 // Run will start the Cycle from read and write from I/O
-func (io *io) Run(length int) {
-	instance.length = length
-
-	go func(ch chan expr) {
+func (io *io) Run(bus bus.Instance) {
+	go func(ch chan []int) {
 		reader := bufio.NewReader(os.Stdin)
 		for {
 			s, err := reader.ReadString('\n')
@@ -48,29 +38,20 @@ func (io *io) Run(length int) {
 				return
 			}
 
-			exprs := parse(s)
+			exprs := io.encoder.parse(s)
 
 			for _, expr := range exprs {
 				ch <- expr
 			}
 		}
-		close(ch)
 	}(io.read)
 
-stdinloop:
 	for {
-		select {
-		case stdin, ok := <-io.read:
-			if !ok {
-				break stdinloop
-			} else {
-				fmt.Println("Read input from stdin:", stdin)
-			}
-		case <-time.After(1 * time.Second):
-			// Do something when there is nothing read from stdin
+		stdin, ok := <-io.read
+		if !ok {
+			break
+		} else {
+			bus.SendToRAM(stdin)
 		}
 	}
-	fmt.Println("Done, stdin must be closed")
 }
-
-func (io *io) private() {}

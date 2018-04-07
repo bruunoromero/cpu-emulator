@@ -1,10 +1,7 @@
 package main
 
-import (
-	"github.com/bruunoromero/cpu-emulator/io"
-)
+import "github.com/bruunoromero/cpu-emulator/vm"
 
 func main() {
-	ioInstance := io.GetInstance(10)
-	ioInstance.Run()
+	vm.Start([]string{"A", "B"})
 }
