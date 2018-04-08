@@ -51,7 +51,7 @@ func (io *io) Run(bus bus.Instance) {
 		if !ok {
 			break
 		} else {
-			bus.SendToRAM(stdin)
+			bus.SendToCPU(stdin)
 		}
 	}
 }
