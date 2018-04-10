@@ -8,7 +8,8 @@ import (
 )
 
 type encoder struct {
-	registers map[string]int8
+	wordLength int
+	registers  map[string]int8
 }
 
 // This constants represents all possible actions in the cpu
@@ -26,18 +27,18 @@ var actions = map[string]int8{
 	"imul": Imul,
 }
 
-func newEncoder(registers []string) encoder {
+func newEncoder(registers []string, word int) encoder {
 	rgs := make(map[string]int8)
 
 	for i, register := range registers {
 		rgs[register] = int8(-(i + 1))
 	}
 
-	return encoder{registers: rgs}
+	return encoder{registers: rgs, wordLength: word}
 }
 
 func (encoder *encoder) encode(action string, params []string) []int8 {
-	payload := []int8{getAction(action)}
+	payload := encoder.expandValue(int(getAction(action)))
 	return append(payload, encoder.mapParams(params)...)
 }
 
@@ -74,7 +75,7 @@ func (encoder *encoder) mapParams(params []string) []int8 {
 				utils.Abort("Cannot convert value")
 			}
 
-			prs = append(prs, int8(value))
+			prs = append(prs, encoder.expandValue(int(value))...)
 		} else {
 			value, err := strconv.Atoi(param)
 
@@ -84,18 +85,39 @@ func (encoder *encoder) mapParams(params []string) []int8 {
 
 				// If register is 0, then there is no register defined with that name
 				if register != 0 {
-					prs = append(prs, register)
+					prs = append(prs, encoder.expandValue(int(register))...)
 				} else {
 					utils.Abort("Invalid register")
 				}
 			} else {
-				prs = append(prs, int8(value))
+				prs = append(prs, encoder.expandValue(value)...)
 			}
 
 		}
 	}
 
 	return prs
+}
+
+func (encoder *encoder) expandValue(value int) []int8 {
+	var res []int8
+
+	v := value
+	valueInserted := false
+
+	for i := 0; i < encoder.wordLength/8; i++ {
+		if v > 127 {
+			res = append(res, 127)
+			v -= 127
+		} else if !valueInserted {
+			valueInserted = true
+			res = append([]int8{int8(v)}, res...)
+		} else {
+			res = append([]int8{0}, res...)
+		}
+	}
+
+	return res
 }
 
 func getAction(action string) int8 {

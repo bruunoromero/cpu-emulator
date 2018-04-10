@@ -16,8 +16,8 @@ func Start(registers []string, wordLength int, memoryLength int) {
 	once.Do(func() {
 		bus := bus.New()
 		io := io.New(registers, wordLength)
-		cpu := cpu.New(len(registers), wordLength)
 		memory := memory.New(memoryLength, wordLength)
+		cpu := cpu.New(len(registers), wordLength, memoryLength/(wordLength/8))
 
 		bus.MakeChannel("cpu")
 		bus.MakeChannel("memory")

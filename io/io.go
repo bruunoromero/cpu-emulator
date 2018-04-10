@@ -22,7 +22,7 @@ type Instance interface {
 func New(registers []string, word int) Instance {
 	return &io{
 		read:    make(chan []int8),
-		encoder: newEncoder(registers),
+		encoder: newEncoder(registers, word),
 	}
 }
 

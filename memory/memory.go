@@ -1,8 +1,6 @@
 package memory
 
 import (
-	"fmt"
-
 	b "github.com/bruunoromero/cpu-emulator/bus"
 	"github.com/bruunoromero/cpu-emulator/utils"
 )
@@ -57,11 +55,12 @@ func (memory *memory) read(payload int8) []int8 {
 }
 
 func (memory *memory) write(payload []int8) {
-	fmt.Println(memory.list)
 	if memory.lastWritePosition > len(memory.list) {
 		memory.lastWritePosition = 0
 	}
 
 	memory.list[memory.lastWritePosition] = payload
 	memory.lastWritePosition++
+
+	// fmt.Println(memory.list)
 }
