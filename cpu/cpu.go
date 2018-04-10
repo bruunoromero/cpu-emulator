@@ -9,36 +9,36 @@ import (
 )
 
 type cpu struct {
-	pi        int
-	registers []int
+	pi        int8
+	registers []int8
 }
 
-// Instance is the interface of the cpu type
+// Instance is the int8erface of the cpu type
 type Instance interface {
-	get(int) int
-	set(int, int)
+	get(int8) int8
+	set(int8, int8)
 	Run(bus.Instance)
-	executeOrAbort(int, func(*int) int) int
+	executeOrAbort(int8, func(*int8) int8) int8
 }
 
 // New returns a new instance of CPU
-func New(registers int) Instance {
+func New(registers int, word int) Instance {
 	return &cpu{
 		pi:        0,
-		registers: make([]int, registers),
+		registers: make([]int8, registers),
 	}
 }
 
 func (cpu *cpu) Run(bus bus.Instance) {
 	go func() {
 		for {
-			value := bus.ReceiveAtCPU()
-			instruction := decode(value)
+			vl := bus.ReceiveFrom("cpu")
+			instruction := decode(vl)
 
 			if instruction.isRegister {
 				switch instruction.action {
 				case io.Inc:
-					cpu.add(instruction.location, []int{1})
+					cpu.add(instruction.location, []value{value{isRegister: false, value: 1}})
 				case io.Add:
 					cpu.add(instruction.location, instruction.params)
 				case io.Mov:
@@ -54,7 +54,7 @@ func (cpu *cpu) Run(bus bus.Instance) {
 	}()
 }
 
-func checkLengthOrAbort(params []int, length int, callback func()) {
+func checkLengthOrAbort(params []value, length int, callback func()) {
 	if len(params) == length {
 		callback()
 	} else {
@@ -62,40 +62,48 @@ func checkLengthOrAbort(params []int, length int, callback func()) {
 	}
 }
 
-func (cpu *cpu) mov(register int, params []int) {
+func (cpu *cpu) extractValue(value value) int8 {
+	if value.isRegister {
+		return cpu.get(value.value)
+	}
+
+	return value.value
+}
+
+func (cpu *cpu) mov(register int8, params []value) {
 	checkLengthOrAbort(params, 1, func() {
-		cpu.set(register, params[0])
+		cpu.set(register, cpu.extractValue(params[0]))
 	})
 }
 
-func (cpu *cpu) add(register int, params []int) {
+func (cpu *cpu) add(register int8, params []value) {
 	checkLengthOrAbort(params, 1, func() {
 		v := cpu.get(register)
-		cpu.set(register, v+params[0])
+		cpu.set(register, v+cpu.extractValue(params[0]))
 	})
 }
 
-func (cpu *cpu) imul(register int, params []int) {
+func (cpu *cpu) imul(register int8, params []value) {
 	checkLengthOrAbort(params, 2, func() {
-		cpu.set(register, params[0]*params[1])
+		cpu.set(register, cpu.extractValue(params[0])*cpu.extractValue(params[1]))
 	})
 }
 
-func (cpu *cpu) set(register int, value int) {
-	cpu.executeOrAbort(register, func(register *int) int {
+func (cpu *cpu) set(register int8, value int8) {
+	cpu.executeOrAbort(register, func(register *int8) int8 {
 		*register = value
 		return *register
 	})
 }
 
-func (cpu *cpu) get(register int) int {
-	return cpu.executeOrAbort(register, func(register *int) int {
+func (cpu *cpu) get(register int8) int8 {
+	return cpu.executeOrAbort(register, func(register *int8) int8 {
 		return *register
 	})
 }
 
-func (cpu *cpu) executeOrAbort(register int, callback func(*int) int) int {
-	if len(cpu.registers)-1 < register || register < 0 {
+func (cpu *cpu) executeOrAbort(register int8, callback func(*int8) int8) int8 {
+	if len(cpu.registers)-1 < int(register) || int(register) < 0 {
 		utils.Abort("Error while accessing register")
 	} else {
 		return callback(&cpu.registers[register])

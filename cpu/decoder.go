@@ -1,32 +1,39 @@
 package cpu
 
 type action struct {
-	action     int
-	location   int
+	action     int8
+	location   int8
 	isRegister bool
-	params     []int
+	params     []value
 }
 
-func decode(payload []int) action {
+type value struct {
+	value      int8
+	isRegister bool
+}
+
+func decode(payload []int8) action {
 	action := action{
-		params: make([]int, 0),
+		params: make([]value, 0),
 	}
 
 	for i, v := range payload {
 		if i == 0 {
 			action.action = v
 		} else if i == 1 {
-			if v > 0 {
-				// If this branch matches, than the value is a memory
-				action.location = v
-				action.isRegister = false
-			} else {
-				// If this branch matches, than the value is a regsiter
-				action.isRegister = true
-				action.location = -(v + 1)
-			}
+			action.location = -(v + 1)
+			action.isRegister = true
 		} else {
-			action.params = append(action.params, v)
+			vl := value{}
+			vl.isRegister = v < 0
+
+			if vl.isRegister {
+				vl.value = -(v + 1)
+			} else {
+				vl.value = v
+			}
+
+			action.params = append(action.params, vl)
 		}
 	}
 

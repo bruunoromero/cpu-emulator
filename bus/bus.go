@@ -1,42 +1,33 @@
 package bus
 
 type bus struct {
-	cpuChannel chan []int
-	ramChannel chan []int
+	channels map[string]chan []int8
 }
 
 // Instance is the interface of the bus type
 type Instance interface {
-	SendToCPU([]int)
-	SendToRAM([]int)
-	ReceiveAtCPU() []int
-	ReceiveAtRAM() []int
+	MakeChannel(string)
+	SendTo(string, []int8)
+	ReceiveFrom(string) []int8
 }
 
 // New returns a new instance of bus
 func New() Instance {
 	return &bus{
-		cpuChannel: make(chan []int),
-		ramChannel: make(chan []int),
+		channels: make(map[string]chan []int8),
 	}
 }
 
-func (bus *bus) SendToCPU(payload []int) {
+func (bus *bus) MakeChannel(channel string) {
+	bus.channels[channel] = make(chan []int8)
+}
+
+func (bus *bus) SendTo(channel string, payload []int8) {
 	go func() {
-		bus.cpuChannel <- payload
+		bus.channels[channel] <- payload
 	}()
 }
 
-func (bus *bus) SendToRAM(payload []int) {
-	go func() {
-		bus.ramChannel <- payload
-	}()
-}
-
-func (bus *bus) ReceiveAtCPU() []int {
-	return <-bus.cpuChannel
-}
-
-func (bus *bus) ReceiveAtRAM() []int {
-	return <-bus.ramChannel
+func (bus *bus) ReceiveFrom(channel string) []int8 {
+	return <-bus.channels[channel]
 }

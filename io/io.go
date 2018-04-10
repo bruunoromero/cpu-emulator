@@ -9,7 +9,7 @@ import (
 
 type io struct {
 	encoder encoder
-	read    chan []int
+	read    chan []int8
 	write   <-chan string
 }
 
@@ -19,39 +19,39 @@ type Instance interface {
 }
 
 // New returns a new instance of the I/O Module
-func New(registers []string) Instance {
+func New(registers []string, word int) Instance {
 	return &io{
-		read:    make(chan []int),
+		read:    make(chan []int8),
 		encoder: newEncoder(registers),
 	}
 }
 
 // Run will start the Cycle from read and write from I/O
 func (io *io) Run(bus bus.Instance) {
-	go func(ch chan []int) {
+	go func() {
 		reader := bufio.NewReader(os.Stdin)
 		for {
 			s, err := reader.ReadString('\n')
 
 			if err != nil {
-				close(ch)
+				close(io.read)
 				return
 			}
 
 			exprs := io.encoder.parse(s)
 
 			for _, expr := range exprs {
-				ch <- expr
+				io.read <- expr
 			}
 		}
-	}(io.read)
+	}()
 
 	for {
 		stdin, ok := <-io.read
 		if !ok {
 			break
 		} else {
-			bus.SendToCPU(stdin)
+			bus.SendTo("memory", stdin)
 		}
 	}
 }

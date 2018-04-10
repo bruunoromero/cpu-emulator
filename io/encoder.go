@@ -8,7 +8,7 @@ import (
 )
 
 type encoder struct {
-	registers map[string]int
+	registers map[string]int8
 }
 
 // This constants represents all possible actions in the cpu
@@ -19,7 +19,7 @@ const (
 	Imul
 )
 
-var actions = map[string]int{
+var actions = map[string]int8{
 	"mov":  Mov,
 	"add":  Add,
 	"inc":  Inc,
@@ -27,22 +27,22 @@ var actions = map[string]int{
 }
 
 func newEncoder(registers []string) encoder {
-	rgs := make(map[string]int)
+	rgs := make(map[string]int8)
 
 	for i, register := range registers {
-		rgs[register] = -(i + 1)
+		rgs[register] = int8(-(i + 1))
 	}
 
 	return encoder{registers: rgs}
 }
 
-func (encoder *encoder) encode(action string, params []string) []int {
-	payload := []int{getAction(action)}
+func (encoder *encoder) encode(action string, params []string) []int8 {
+	payload := []int8{getAction(action)}
 	return append(payload, encoder.mapParams(params)...)
 }
 
-func (encoder *encoder) parse(code string) [][]int {
-	var exprs [][]int
+func (encoder *encoder) parse(code string) [][]int8 {
+	var exprs [][]int8
 	lines := strings.Split(code, ";")
 
 	for _, line := range lines {
@@ -62,8 +62,8 @@ func (encoder *encoder) parse(code string) [][]int {
 	return exprs
 }
 
-func (encoder *encoder) mapParams(params []string) []int {
-	var prs []int
+func (encoder *encoder) mapParams(params []string) []int8 {
+	var prs []int8
 
 	for _, param := range params {
 		if strings.HasPrefix(param, "0x") {
@@ -74,7 +74,7 @@ func (encoder *encoder) mapParams(params []string) []int {
 				utils.Abort("Cannot convert value")
 			}
 
-			prs = append(prs, int(value))
+			prs = append(prs, int8(value))
 		} else {
 			value, err := strconv.Atoi(param)
 
@@ -89,7 +89,7 @@ func (encoder *encoder) mapParams(params []string) []int {
 					utils.Abort("Invalid register")
 				}
 			} else {
-				prs = append(prs, int(value))
+				prs = append(prs, int8(value))
 			}
 
 		}
@@ -98,7 +98,7 @@ func (encoder *encoder) mapParams(params []string) []int {
 	return prs
 }
 
-func getAction(action string) int {
+func getAction(action string) int8 {
 	val, ok := actions[action]
 
 	if !ok {
