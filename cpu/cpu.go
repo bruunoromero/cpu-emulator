@@ -3,7 +3,7 @@ package cpu
 import (
 	"fmt"
 
-	"github.com/bruunoromero/cpu-emulator/bus"
+	b "github.com/bruunoromero/cpu-emulator/bus"
 	"github.com/bruunoromero/cpu-emulator/io"
 	"github.com/bruunoromero/cpu-emulator/utils"
 )
@@ -17,7 +17,7 @@ type cpu struct {
 type Instance interface {
 	get(int8) int8
 	set(int8, int8)
-	Run(bus.Instance)
+	Run(b.Instance)
 	executeOrAbort(int8, func(*int8) int8) int8
 }
 
@@ -29,26 +29,33 @@ func New(registers int, word int) Instance {
 	}
 }
 
-func (cpu *cpu) Run(bus bus.Instance) {
+func (cpu *cpu) Run(bus b.Instance) {
 	go func() {
 		for {
-			vl := bus.ReceiveFrom("cpu")
-			instruction := decode(vl)
+			v := <-bus.ReceiveFrom("cpu")
+			if v.Signal == b.WRITE {
+				bus.SendTo("memory", "cpu", b.READ, []int8{cpu.pi})
+				cpu.pi++
+				select {
+				case vl := <-bus.ReceiveFrom("cpu"):
+					instruction := decode(vl.Payload)
 
-			if instruction.isRegister {
-				switch instruction.action {
-				case io.Inc:
-					cpu.add(instruction.location, []value{value{isRegister: false, value: 1}})
-				case io.Add:
-					cpu.add(instruction.location, instruction.params)
-				case io.Mov:
-					cpu.mov(instruction.location, instruction.params)
-				case io.Imul:
-					cpu.imul(instruction.location, instruction.params)
+					if instruction.isRegister {
+						switch instruction.action {
+						case io.Inc:
+							cpu.add(instruction.location, []value{value{isRegister: false, value: 1}})
+						case io.Add:
+							cpu.add(instruction.location, instruction.params)
+						case io.Mov:
+							cpu.mov(instruction.location, instruction.params)
+						case io.Imul:
+							cpu.imul(instruction.location, instruction.params)
+						}
+					}
+
+					fmt.Println(cpu.registers)
 				}
 			}
-
-			fmt.Println(cpu.registers)
 
 		}
 	}()

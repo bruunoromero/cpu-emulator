@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"os"
 
-	"github.com/bruunoromero/cpu-emulator/bus"
+	b "github.com/bruunoromero/cpu-emulator/bus"
 )
 
 type io struct {
@@ -15,7 +15,7 @@ type io struct {
 
 // Instance is the interface of the io type
 type Instance interface {
-	Run(bus.Instance)
+	Run(b.Instance)
 }
 
 // New returns a new instance of the I/O Module
@@ -27,7 +27,8 @@ func New(registers []string, word int) Instance {
 }
 
 // Run will start the Cycle from read and write from I/O
-func (io *io) Run(bus bus.Instance) {
+func (io *io) Run(bus b.Instance) {
+	values := 0
 	go func() {
 		reader := bufio.NewReader(os.Stdin)
 		for {
@@ -41,17 +42,22 @@ func (io *io) Run(bus bus.Instance) {
 			exprs := io.encoder.parse(s)
 
 			for _, expr := range exprs {
+				values++
 				io.read <- expr
 			}
+
 		}
 	}()
 
 	for {
-		stdin, ok := <-io.read
-		if !ok {
-			break
-		} else {
-			bus.SendTo("memory", stdin)
+		select {
+		case stdin, ok := <-io.read:
+			if !ok {
+				break
+			} else {
+				bus.SendTo("memory", "io", b.WRITE, stdin)
+				bus.SendTo("cpu", "io", b.WRITE, []int8{})
+			}
 		}
 	}
 }

@@ -1,21 +1,23 @@
 package memory
 
 import (
-	"github.com/bruunoromero/cpu-emulator/bus"
+	"fmt"
+
+	b "github.com/bruunoromero/cpu-emulator/bus"
 	"github.com/bruunoromero/cpu-emulator/utils"
 )
 
 type memory struct {
 	wordLength        int
 	lastWritePosition int
-	list              []int8
+	list              [][]int8
 }
 
 // Instance is the interface for the memory type
 type Instance interface {
 	write([]int8)
-	read() []int8
-	Run(bus bus.Instance)
+	read(int8) []int8
+	Run(bus b.Instance)
 }
 
 // New returns a new instance of Memory
@@ -31,30 +33,35 @@ func New(size int, wordLength int) Instance {
 	return &memory{
 		lastWritePosition: 0,
 		wordLength:        wordLength,
-		list:              make([]int8, maxWords),
+		list:              make([][]int8, maxWords),
 	}
 }
 
-func (memory *memory) Run(bus bus.Instance) {
+func (memory *memory) Run(bus b.Instance) {
 	go func() {
 		for {
-			value := bus.ReceiveFrom("memory")
-			memory.write(value)
+			select {
+			case value := <-bus.ReceiveFrom("memory"):
+				if value.Signal == b.READ {
+					bus.SendTo(value.Origin, "memory", b.WRITE, memory.read(value.Payload[0]))
+				} else {
+					memory.write(value.Payload)
+				}
+			}
 		}
 	}()
 }
 
-func (memory *memory) read() []int8 {
-	return nil
+func (memory *memory) read(payload int8) []int8 {
+	return memory.list[payload]
 }
 
 func (memory *memory) write(payload []int8) {
-	if memory.lastWritePosition+4 > len(memory.list) {
+	fmt.Println(memory.list)
+	if memory.lastWritePosition > len(memory.list) {
 		memory.lastWritePosition = 0
 	}
 
-	for i, v := range payload {
-		memory.list[memory.lastWritePosition+1] = v
-		memory.lastWritePosition += i
-	}
+	memory.list[memory.lastWritePosition] = payload
+	memory.lastWritePosition++
 }

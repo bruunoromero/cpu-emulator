@@ -19,12 +19,13 @@ func Start(registers []string, wordLength int, memoryLength int) {
 		cpu := cpu.New(len(registers), wordLength)
 		memory := memory.New(memoryLength, wordLength)
 
-		bus.MakeChannel("io")
 		bus.MakeChannel("cpu")
 		bus.MakeChannel("memory")
 
 		memory.Run(bus)
 		cpu.Run(bus)
 		io.Run(bus)
+
+		bus.Wait()
 	})
 }
