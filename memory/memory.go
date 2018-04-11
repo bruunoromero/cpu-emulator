@@ -8,13 +8,13 @@ import (
 type memory struct {
 	wordLength        int
 	lastWritePosition int
-	list              [][]int8
+	list              [][]byte
 }
 
 // Instance is the interface for the memory type
 type Instance interface {
-	write([]int8)
-	read(int8) []int8
+	write([]byte)
+	read(byte) []byte
 	Run(bus b.Instance)
 }
 
@@ -31,7 +31,7 @@ func New(size int, wordLength int) Instance {
 	return &memory{
 		lastWritePosition: 0,
 		wordLength:        wordLength,
-		list:              make([][]int8, maxWords),
+		list:              make([][]byte, maxWords),
 	}
 }
 
@@ -50,17 +50,15 @@ func (memory *memory) Run(bus b.Instance) {
 	}()
 }
 
-func (memory *memory) read(payload int8) []int8 {
+func (memory *memory) read(payload byte) []byte {
 	return memory.list[payload]
 }
 
-func (memory *memory) write(payload []int8) {
+func (memory *memory) write(payload []byte) {
 	if memory.lastWritePosition > len(memory.list) {
 		memory.lastWritePosition = 0
 	}
 
 	memory.list[memory.lastWritePosition] = payload
 	memory.lastWritePosition++
-
-	// fmt.Println(memory.list)
 }

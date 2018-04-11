@@ -9,7 +9,7 @@ import (
 
 type io struct {
 	encoder encoder
-	read    chan []int8
+	read    chan []byte
 	write   <-chan string
 }
 
@@ -21,7 +21,7 @@ type Instance interface {
 // New returns a new instance of the I/O Module
 func New(registers []string, word int) Instance {
 	return &io{
-		read:    make(chan []int8),
+		read:    make(chan []byte),
 		encoder: newEncoder(registers, word),
 	}
 }
@@ -56,7 +56,7 @@ func (io *io) Run(bus b.Instance) {
 				break
 			} else {
 				bus.SendTo("memory", "io", b.WRITE, stdin)
-				bus.SendTo("cpu", "io", b.WRITE, []int8{})
+				bus.SendTo("cpu", "io", b.WRITE, []byte{})
 			}
 		}
 	}

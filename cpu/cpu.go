@@ -1,6 +1,8 @@
 package cpu
 
 import (
+	"fmt"
+
 	b "github.com/bruunoromero/cpu-emulator/bus"
 	"github.com/bruunoromero/cpu-emulator/io"
 	"github.com/bruunoromero/cpu-emulator/utils"
@@ -36,12 +38,12 @@ func (cpu *cpu) Run(bus b.Instance) {
 		for {
 			v := <-bus.ReceiveFrom("cpu")
 			if v.Signal == b.WRITE {
-				bus.SendTo("memory", "cpu", b.READ, []int8{int8(cpu.pi)})
+				bus.SendTo("memory", "cpu", b.READ, []byte{byte(cpu.pi)})
 
 				if cpu.pi == cpu.maxPi {
-					cpu.pi++
-				} else {
 					cpu.pi = 0
+				} else {
+					cpu.pi++
 				}
 
 				select {
@@ -60,6 +62,8 @@ func (cpu *cpu) Run(bus b.Instance) {
 							cpu.imul(instruction.location, instruction.params)
 						}
 					}
+
+					fmt.Println(cpu.registers)
 
 				}
 			}
@@ -117,7 +121,7 @@ func (cpu *cpu) get(register int) int {
 }
 
 func (cpu *cpu) executeOrAbort(register int, callback func(*int) int) int {
-	if len(cpu.registers)-1 < int(register) || int(register) < 0 {
+	if len(cpu.registers)-1 < register || register < 0 {
 		utils.Abort("Error while accessing register")
 	} else {
 		return callback(&cpu.registers[register])

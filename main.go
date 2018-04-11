@@ -45,4 +45,5 @@ func main() {
 	fmt.Println("")
 
 	vm.Start([]string{"A", "B"}, word, memory)
+
 }

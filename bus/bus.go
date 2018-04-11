@@ -13,7 +13,7 @@ type bus struct {
 type action struct {
 	Signal  int
 	Origin  string
-	Payload []int8
+	Payload []byte
 }
 
 // READ and WRITE are the possible signals of an bus operation
@@ -27,7 +27,7 @@ type Instance interface {
 	Wait()
 	MakeChannel(string)
 	ReceiveFrom(string) chan action
-	SendTo(string, string, int, []int8)
+	SendTo(string, string, int, []byte)
 }
 
 // New returns a new instance of bus
@@ -45,7 +45,7 @@ func (bus *bus) Wait() {
 	bus.wg.Wait()
 }
 
-func (bus *bus) SendTo(channel string, origin string, signal int, payload []int8) {
+func (bus *bus) SendTo(channel string, origin string, signal int, payload []byte) {
 	bus.wg.Add(1)
 	go func() {
 		time.Sleep(500 * time.Microsecond)

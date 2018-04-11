@@ -27,8 +27,8 @@ func newDecoder(word int) decoder {
 
 }
 
-func makeChunks(size int, arr []int8) [][]int8 {
-	var divided [][]int8
+func makeChunks(size int, arr []byte) [][]byte {
+	var divided [][]byte
 
 	for i := 0; i < len(arr); i += size {
 		end := i + size
@@ -43,7 +43,7 @@ func makeChunks(size int, arr []int8) [][]int8 {
 	return divided
 }
 
-func (decoder *decoder) decode(payload []int8) action {
+func (decoder *decoder) decode(payload []byte) action {
 	action := action{
 		params: make([]value, 0),
 	}
@@ -51,13 +51,13 @@ func (decoder *decoder) decode(payload []int8) action {
 	numBytes := decoder.wordLength / 8
 
 	action.isRegister = true
-	action.location = -(utils.SumIntByteArray(payload[numBytes:numBytes*2]) + 1)
+	action.location = -(utils.FromBytes(decoder.wordLength, payload[numBytes:numBytes*2]) + 1)
 
-	action.action = utils.SumIntByteArray(payload[:numBytes])
+	action.action = utils.FromBytes(decoder.wordLength, payload[:numBytes])
 	chunks := makeChunks(numBytes, payload[numBytes*2:])
 
 	for _, chunk := range chunks {
-		v := utils.SumIntByteArray(chunk)
+		v := utils.FromBytes(decoder.wordLength, chunk)
 		vl := value{}
 		vl.isRegister = v < 0
 

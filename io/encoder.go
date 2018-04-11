@@ -9,7 +9,7 @@ import (
 
 type encoder struct {
 	wordLength int
-	registers  map[string]int8
+	registers  map[string]int
 }
 
 // This constants represents all possible actions in the cpu
@@ -20,7 +20,7 @@ const (
 	Imul
 )
 
-var actions = map[string]int8{
+var actions = map[string]byte{
 	"mov":  Mov,
 	"add":  Add,
 	"inc":  Inc,
@@ -28,22 +28,22 @@ var actions = map[string]int8{
 }
 
 func newEncoder(registers []string, word int) encoder {
-	rgs := make(map[string]int8)
+	rgs := make(map[string]int)
 
 	for i, register := range registers {
-		rgs[register] = int8(-(i + 1))
+		rgs[register] = -(i + 1)
 	}
 
 	return encoder{registers: rgs, wordLength: word}
 }
 
-func (encoder *encoder) encode(action string, params []string) []int8 {
+func (encoder *encoder) encode(action string, params []string) []byte {
 	payload := encoder.expandValue(int(getAction(action)))
 	return append(payload, encoder.mapParams(params)...)
 }
 
-func (encoder *encoder) parse(code string) [][]int8 {
-	var exprs [][]int8
+func (encoder *encoder) parse(code string) [][]byte {
+	var exprs [][]byte
 	lines := strings.Split(code, ";")
 
 	for _, line := range lines {
@@ -63,8 +63,8 @@ func (encoder *encoder) parse(code string) [][]int8 {
 	return exprs
 }
 
-func (encoder *encoder) mapParams(params []string) []int8 {
-	var prs []int8
+func (encoder *encoder) mapParams(params []string) []byte {
+	var prs []byte
 
 	for _, param := range params {
 		if strings.HasPrefix(param, "0x") {
@@ -99,28 +99,11 @@ func (encoder *encoder) mapParams(params []string) []int8 {
 	return prs
 }
 
-func (encoder *encoder) expandValue(value int) []int8 {
-	var res []int8
-
-	v := value
-	valueInserted := false
-
-	for i := 0; i < encoder.wordLength/8; i++ {
-		if v > 127 {
-			res = append(res, 127)
-			v -= 127
-		} else if !valueInserted {
-			valueInserted = true
-			res = append([]int8{int8(v)}, res...)
-		} else {
-			res = append([]int8{0}, res...)
-		}
-	}
-
-	return res
+func (encoder *encoder) expandValue(value int) []byte {
+	return utils.ToBytes(encoder.wordLength, value)
 }
 
-func getAction(action string) int8 {
+func getAction(action string) byte {
 	val, ok := actions[action]
 
 	if !ok {
