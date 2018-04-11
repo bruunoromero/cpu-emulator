@@ -2,7 +2,6 @@ package bus
 
 import (
 	"sync"
-	"time"
 )
 
 type bus struct {
@@ -48,7 +47,6 @@ func (bus *bus) Wait() {
 func (bus *bus) SendTo(channel string, origin string, signal int, payload []byte) {
 	bus.wg.Add(1)
 	go func() {
-		time.Sleep(500 * time.Microsecond)
 		bus.channels[channel] <- action{Signal: signal, Payload: payload, Origin: origin}
 		bus.wg.Done()
 	}()

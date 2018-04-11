@@ -44,6 +44,6 @@ func main() {
 	fmt.Println("Log: VM Started")
 	fmt.Println("")
 
-	vm.Start([]string{"A", "B"}, word, memory)
+	vm.Start([]string{"A", "B", "C", "D", "E"}, word, memory)
 
 }

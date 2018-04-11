@@ -55,7 +55,7 @@ func (memory *memory) read(payload byte) []byte {
 }
 
 func (memory *memory) write(payload []byte) {
-	if memory.lastWritePosition > len(memory.list) {
+	if memory.lastWritePosition == len(memory.list) {
 		memory.lastWritePosition = 0
 	}
 

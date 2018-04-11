@@ -40,7 +40,7 @@ func (cpu *cpu) Run(bus b.Instance) {
 			if v.Signal == b.WRITE {
 				bus.SendTo("memory", "cpu", b.READ, []byte{byte(cpu.pi)})
 
-				if cpu.pi == cpu.maxPi {
+				if cpu.pi == cpu.maxPi-1 {
 					cpu.pi = 0
 				} else {
 					cpu.pi++
@@ -48,6 +48,7 @@ func (cpu *cpu) Run(bus b.Instance) {
 
 				select {
 				case vl := <-bus.ReceiveFrom("cpu"):
+					fmt.Println(vl.Payload)
 					instruction := cpu.decoder.decode(vl.Payload)
 
 					if instruction.isRegister {

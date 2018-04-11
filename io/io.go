@@ -55,8 +55,8 @@ func (io *io) Run(bus b.Instance) {
 			if !ok {
 				break
 			} else {
-				bus.SendTo("memory", "io", b.WRITE, stdin)
 				bus.SendTo("cpu", "io", b.WRITE, []byte{})
+				bus.SendTo("memory", "io", b.WRITE, stdin)
 			}
 		}
 	}
