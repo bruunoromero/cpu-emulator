@@ -23,15 +23,16 @@ func New(size int, wordLength int) Instance {
 	wordLengthByte := wordLength / 8
 
 	maxWords := size / wordLengthByte
+	length := maxWords / 4
 
-	if maxWords/4 < 1 {
+	if length < 1 {
 		utils.Abort("Cannot instanciate ram with this length")
 	}
 
 	return &memory{
 		lastWritePosition: 0,
 		wordLength:        wordLength,
-		list:              make([][]byte, maxWords),
+		list:              make([][]byte, length),
 	}
 }
 
@@ -55,7 +56,7 @@ func (memory *memory) read(payload byte) []byte {
 }
 
 func (memory *memory) write(payload []byte) {
-	if memory.lastWritePosition > len(memory.list) {
+	if memory.lastWritePosition >= len(memory.list) {
 		memory.lastWritePosition = 0
 	}
 

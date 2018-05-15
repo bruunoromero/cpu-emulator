@@ -1,10 +1,9 @@
 package cpu
 
 import (
-	"fmt"
-
 	b "github.com/bruunoromero/cpu-emulator/bus"
 	"github.com/bruunoromero/cpu-emulator/io"
+	"github.com/bruunoromero/cpu-emulator/parser"
 	"github.com/bruunoromero/cpu-emulator/utils"
 )
 
@@ -12,7 +11,7 @@ type cpu struct {
 	pi        int
 	maxPi     int
 	registers []int
-	decoder   decoder
+	decoder   parser.Decoder
 }
 
 // Instance is the interface of the cpu type
@@ -28,7 +27,7 @@ func New(registers int, word int, memory int) Instance {
 	return &cpu{
 		pi:        0,
 		maxPi:     int(memory),
-		decoder:   newDecoder(word),
+		decoder:   parser.NewDecoder(word),
 		registers: make([]int, registers),
 	}
 }
@@ -40,7 +39,7 @@ func (cpu *cpu) Run(bus b.Instance) {
 			if v.Signal == b.WRITE {
 				bus.SendTo("memory", "cpu", b.READ, []byte{byte(cpu.pi)})
 
-				if cpu.pi == cpu.maxPi {
+				if cpu.pi == cpu.maxPi-1 {
 					cpu.pi = 0
 				} else {
 					cpu.pi++
@@ -48,7 +47,7 @@ func (cpu *cpu) Run(bus b.Instance) {
 
 				select {
 				case vl := <-bus.ReceiveFrom("cpu"):
-					instruction := cpu.decoder.decode(vl.Payload)
+					instruction := cpu.decoder.Decode(vl.Payload)
 
 					if instruction.isRegister {
 						switch instruction.action {
@@ -62,8 +61,6 @@ func (cpu *cpu) Run(bus b.Instance) {
 							cpu.imul(instruction.location, instruction.params)
 						}
 					}
-
-					fmt.Println(cpu.registers)
 
 				}
 			}

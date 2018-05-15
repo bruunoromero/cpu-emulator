@@ -1,10 +1,10 @@
-package cpu
+package parser
 
 import (
 	"github.com/bruunoromero/cpu-emulator/utils"
 )
 
-type decoder struct {
+type Decoder struct {
 	wordLength int
 }
 
@@ -20,8 +20,8 @@ type value struct {
 	isRegister bool
 }
 
-func newDecoder(word int) decoder {
-	return decoder{
+func NewDecoder(word int) Decoder {
+	return Decoder{
 		wordLength: word,
 	}
 
@@ -43,7 +43,7 @@ func makeChunks(size int, arr []byte) [][]byte {
 	return divided
 }
 
-func (decoder *decoder) decode(payload []byte) action {
+func (decoder *Decoder) Decode(payload []byte) action {
 	action := action{
 		params: make([]value, 0),
 	}
