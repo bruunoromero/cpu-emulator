@@ -17,10 +17,14 @@ func Start(registers []string, wordLength int, memoryLength int) {
 		bus := bus.New()
 		io := io.New(registers, wordLength)
 		memory := memory.New(memoryLength, wordLength)
-		cpu := cpu.New(len(registers), wordLength, memoryLength/(wordLength/8))
+		cpu := cpu.New(len(registers), wordLength, (memoryLength/(wordLength/8))/4)
 
-		bus.MakeChannel("cpu")
-		bus.MakeChannel("memory")
+		bus.MakeChannel("cpuData")
+		bus.MakeChannel("memoryData")
+		bus.MakeChannel("cpuAddress")
+		bus.MakeChannel("memoryAddress")
+		bus.MakeChannel("cpuInstruction")
+		bus.MakeChannel("memoryInstruction")
 
 		memory.Run(bus)
 		cpu.Run(bus)

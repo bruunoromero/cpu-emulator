@@ -23,15 +23,16 @@ func New(size int, wordLength int) Instance {
 	wordLengthByte := wordLength / 8
 
 	maxWords := size / wordLengthByte
+	length := maxWords / 4
 
-	if maxWords/4 < 1 {
+	if length < 1 {
 		utils.Abort("Cannot instanciate ram with this length")
 	}
 
 	return &memory{
 		lastWritePosition: 0,
 		wordLength:        wordLength,
-		list:              make([][]byte, maxWords),
+		list:              make([][]byte, length),
 	}
 }
 
@@ -41,9 +42,9 @@ func (memory *memory) Run(bus b.Instance) {
 			select {
 			case value := <-bus.ReceiveFrom("memory"):
 				if value.Signal == b.READ {
-					bus.SendTo(value.Origin, "memory", b.WRITE, memory.read(value.Payload[0]))
+					// bus.SendTo(value.Origin, "memory", b.WRITE, memory.read(value.Payload[0]))
 				} else {
-					memory.write(value.Payload)
+					// memory.write(value.Payload)
 				}
 			}
 		}

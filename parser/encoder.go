@@ -1,4 +1,4 @@
-package io
+package parser
 
 import (
 	"strconv"
@@ -7,9 +7,15 @@ import (
 	"github.com/bruunoromero/cpu-emulator/utils"
 )
 
-type encoder struct {
+type Encoder struct {
 	wordLength int
 	registers  map[string]int
+}
+
+type Msg struct {
+	Index  int
+	Lenght int
+	Value  byte
 }
 
 // This constants represents all possible actions in the cpu
@@ -27,22 +33,22 @@ var actions = map[string]byte{
 	"imul": Imul,
 }
 
-func newEncoder(registers []string, word int) encoder {
+func NewEncoder(registers []string, word int) Encoder {
 	rgs := make(map[string]int)
 
 	for i, register := range registers {
 		rgs[register] = -(i + 1)
 	}
 
-	return encoder{registers: rgs, wordLength: word}
+	return Encoder{registers: rgs, wordLength: word}
 }
 
-func (encoder *encoder) encode(action string, params []string) []byte {
+func (encoder *Encoder) encode(action string, params []string) []byte {
 	payload := encoder.expandValue(int(getAction(action)))
 	return append(payload, encoder.mapParams(params)...)
 }
 
-func (encoder *encoder) parse(code string) [][]byte {
+func (encoder *Encoder) Parse(code string) [][]byte {
 	var exprs [][]byte
 	lines := strings.Split(code, ";")
 
@@ -63,7 +69,7 @@ func (encoder *encoder) parse(code string) [][]byte {
 	return exprs
 }
 
-func (encoder *encoder) mapParams(params []string) []byte {
+func (encoder *Encoder) mapParams(params []string) []byte {
 	var prs []byte
 
 	for _, param := range params {
@@ -99,7 +105,7 @@ func (encoder *encoder) mapParams(params []string) []byte {
 	return prs
 }
 
-func (encoder *encoder) expandValue(value int) []byte {
+func (encoder *Encoder) expandValue(value int) []byte {
 	return utils.ToBytes(encoder.wordLength, value)
 }
 

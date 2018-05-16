@@ -2,15 +2,20 @@ package io
 
 import (
 	"bufio"
+	"fmt"
 	"os"
+	"path/filepath"
+
+	"github.com/bruunoromero/cpu-emulator/parser"
+	"github.com/bruunoromero/cpu-emulator/utils"
 
 	b "github.com/bruunoromero/cpu-emulator/bus"
 )
 
 type io struct {
-	encoder encoder
 	read    chan []byte
 	write   <-chan string
+	encoder parser.Encoder
 }
 
 // Instance is the interface of the io type
@@ -22,42 +27,50 @@ type Instance interface {
 func New(registers []string, word int) Instance {
 	return &io{
 		read:    make(chan []byte),
-		encoder: newEncoder(registers, word),
+		encoder: parser.NewEncoder(registers, word),
 	}
 }
 
 // Run will start the Cycle from read and write from I/O
 func (io *io) Run(bus b.Instance) {
-	values := 0
-	go func() {
-		reader := bufio.NewReader(os.Stdin)
-		for {
-			s, err := reader.ReadString('\n')
+	func() {
+		path, fileErr := filepath.Abs("./code.s")
 
-			if err != nil {
-				close(io.read)
-				return
-			}
+		if fileErr != nil {
+			utils.Abort("Could not get path of the file")
+		}
 
-			exprs := io.encoder.parse(s)
+		inFile, openErr := os.Open(path)
+
+		if openErr != nil {
+			utils.Abort("Could not open the file")
+		}
+
+		defer inFile.Close()
+		scanner := bufio.NewScanner(inFile)
+		scanner.Split(bufio.ScanLines)
+
+		for scanner.Scan() {
+
+			exprs := io.encoder.Parse(scanner.Text())
 
 			for _, expr := range exprs {
-				values++
-				io.read <- expr
+				fmt.Println(expr)
+				// io.read <- expr
 			}
 
 		}
 	}()
 
-	for {
-		select {
-		case stdin, ok := <-io.read:
-			if !ok {
-				break
-			} else {
-				bus.SendTo("cpu", "io", b.WRITE, []byte{})
-				bus.SendTo("memory", "io", b.WRITE, stdin)
-			}
-		}
-	}
+	// for {
+	// 	select {
+	// 	case stdin, ok := <-io.read:
+	// 		if !ok {
+	// 			break
+	// 		} else {
+	// 			bus.SendTo("cpu", "io", b.WRITE, []byte{})
+	// 			bus.SendTo("memory", "io", b.WRITE, stdin)
+	// 		}
+	// 	}
+	// }
 }
