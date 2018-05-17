@@ -2,15 +2,15 @@ package bus
 
 import (
 	"container/list"
-	"sync"
+	"time"
 
 	"github.com/bruunoromero/cpu-emulator/parser"
 )
 
 type bus struct {
+	length    int
 	frequency int
 	buffer    *list.List
-	wg        sync.WaitGroup
 	channels  map[string]chan action
 }
 
@@ -31,9 +31,19 @@ const (
 	WRITE
 )
 
+// DATA constant
+const DATA = "Data"
+
+// ADDRESS constant
+const ADDRESS = "Address"
+
+// INSTUCTION constant
+const INSTUCTION = "Instruction"
+
+var lanes = []string{ADDRESS, DATA, INSTUCTION}
+
 // Instance is the interface of the bus type
 type Instance interface {
-	Wait()
 	Start()
 	MakeChannel(string)
 	ReceiveFrom(string) chan action
@@ -41,8 +51,9 @@ type Instance interface {
 }
 
 // New returns a new instance of bus
-func New(frequency int) Instance {
+func New(frequency int, length int) Instance {
 	return &bus{
+		length:    length,
 		frequency: frequency,
 		buffer:    list.New(),
 		channels:  make(map[string]chan action),
@@ -50,35 +61,65 @@ func New(frequency int) Instance {
 }
 
 func (bus *bus) MakeChannel(channel string) {
-	bus.channels[channel] = make(chan action)
+	for _, lane := range lanes {
+		bus.channels[channel+lane] = make(chan action)
+	}
 }
 
-func (bus *bus) Wait() {
-	bus.wg.Wait()
+func getLane(msg parser.Msg) string {
+	if msg.Type == parser.CALL {
+		return INSTUCTION
+	} else if msg.Type == parser.LITERAL {
+		return DATA
+	} else if msg.Type == parser.MEMORY || msg.Type == parser.REGISTER {
+		return ADDRESS
+	}
+
+	return ""
 }
 
 func (bus *bus) SendTo(channel string, origin string, signal int, payload parser.Msg) {
 	act := action{Signal: signal, Payload: payload, Origin: origin}
-
-	bus.buffer.PushBack(msg{channel: channel, action: act})
+	lane := getLane(payload)
+	bus.buffer.PushBack(msg{channel: channel + lane, action: act})
 }
 
 func (bus *bus) ReceiveFrom(channel string) chan action {
 	return bus.channels[channel]
 }
 
-func (bus *bus) send() {
-	go func() {
-		front := bus.buffer.Front()
-		if front != nil {
-			el := front.Value.(msg)
+func (bus *bus) send(front *list.Element, channelsLength map[string]int) bool {
 
-			bus.buffer.Remove(front)
-			bus.channels[el.channel] <- el.action
+	if front != nil {
+		el := front.Value.(msg)
+		if channelsLength[el.channel]+8 < bus.length {
+			channelsLength[el.channel] += 8
+			// go func() {
+			// 	bus.channels[el.channel] <- el.action
+			// }()
+			return true
 		}
-	}()
+	}
+
+	return false
 }
 
 func (bus *bus) Start() {
+	go func() {
+		for {
+			sent := make([]*list.Element, 0)
+			channelsLength := make(map[string]int)
+			for front := bus.buffer.Front(); front != nil; front = front.Next() {
+				if bus.send(front, channelsLength) {
+					sent = append(sent, front)
+				}
+			}
 
+			for _, msg := range sent {
+				bus.buffer.Remove(msg)
+			}
+
+			time.Sleep(time.Second)
+		}
+	}()
 }

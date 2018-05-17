@@ -52,7 +52,7 @@ func (cpu *cpu) Run(bus b.Instance) {
 					if instruction.isRegister {
 						switch instruction.action {
 						case io.Inc:
-							cpu.add(instruction.location, []value{value{isRegister: false, value: 1}})
+							cpu.add(instruction.location, []parser.Value{value{isRegister: false, value: 1}})
 						case io.Add:
 							cpu.add(instruction.location, instruction.params)
 						case io.Mov:
@@ -69,7 +69,7 @@ func (cpu *cpu) Run(bus b.Instance) {
 	}()
 }
 
-func checkLengthOrAbort(params []value, length int, callback func()) {
+func checkLengthOrAbort(params []parser.Value, length int, callback func()) {
 	if len(params) == length {
 		callback()
 	} else {
@@ -77,28 +77,28 @@ func checkLengthOrAbort(params []value, length int, callback func()) {
 	}
 }
 
-func (cpu *cpu) extractValue(value value) int {
-	if value.isRegister {
-		return cpu.get(value.value)
+func (cpu *cpu) extractValue(value parser.Value) int {
+	if value.IsRegister {
+		return cpu.get(value.Value)
 	}
 
-	return value.value
+	return value.Value
 }
 
-func (cpu *cpu) mov(register int, params []value) {
+func (cpu *cpu) mov(register int, params []parser.Value) {
 	checkLengthOrAbort(params, 1, func() {
 		cpu.set(register, cpu.extractValue(params[0]))
 	})
 }
 
-func (cpu *cpu) add(register int, params []value) {
+func (cpu *cpu) add(register int, params []parser.Value) {
 	checkLengthOrAbort(params, 1, func() {
 		v := cpu.get(register)
 		cpu.set(register, v+cpu.extractValue(params[0]))
 	})
 }
 
-func (cpu *cpu) imul(register int, params []value) {
+func (cpu *cpu) imul(register int, params []parser.Value) {
 	checkLengthOrAbort(params, 2, func() {
 		cpu.set(register, cpu.extractValue(params[0])*cpu.extractValue(params[1]))
 	})

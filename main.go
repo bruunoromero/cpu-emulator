@@ -33,6 +33,7 @@ func getMemoryLengh() int {
 }
 
 func main() {
+
 	word := getWordLengh()
 	memory := getMemoryLengh()
 

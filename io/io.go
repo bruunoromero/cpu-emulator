@@ -2,7 +2,6 @@ package io
 
 import (
 	"bufio"
-	"fmt"
 	"os"
 	"path/filepath"
 
@@ -13,7 +12,7 @@ import (
 )
 
 type io struct {
-	read    chan []byte
+	read    chan []parser.Msg
 	write   <-chan string
 	encoder parser.Encoder
 }
@@ -26,14 +25,14 @@ type Instance interface {
 // New returns a new instance of the I/O Module
 func New(registers []string, word int) Instance {
 	return &io{
-		read:    make(chan []byte),
+		read:    make(chan []parser.Msg),
 		encoder: parser.NewEncoder(registers, word),
 	}
 }
 
 // Run will start the Cycle from read and write from I/O
 func (io *io) Run(bus b.Instance) {
-	func() {
+	go func() {
 		path, fileErr := filepath.Abs("./code.s")
 
 		if fileErr != nil {
@@ -55,22 +54,24 @@ func (io *io) Run(bus b.Instance) {
 			exprs := io.encoder.Parse(scanner.Text())
 
 			for _, expr := range exprs {
-				fmt.Println(expr)
-				// io.read <- expr
+				io.read <- expr
 			}
 
 		}
 	}()
 
-	// for {
-	// 	select {
-	// 	case stdin, ok := <-io.read:
-	// 		if !ok {
-	// 			break
-	// 		} else {
-	// 			bus.SendTo("cpu", "io", b.WRITE, []byte{})
-	// 			bus.SendTo("memory", "io", b.WRITE, stdin)
-	// 		}
-	// 	}
-	// }
+	for {
+		select {
+		case stdin, ok := <-io.read:
+			if !ok {
+				break
+			} else {
+				bus.SendTo("cpu", "io", b.WRITE, parser.Msg{})
+
+				for _, msg := range stdin {
+					bus.SendTo("memory", "io", b.WRITE, msg)
+				}
+			}
+		}
+	}
 }

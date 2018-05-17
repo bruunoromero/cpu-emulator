@@ -1,22 +1,12 @@
 package parser
 
 import (
+	"math/rand"
 	"strconv"
 	"strings"
 
 	"github.com/bruunoromero/cpu-emulator/utils"
 )
-
-type Encoder struct {
-	wordLength int
-	registers  map[string]int
-}
-
-type Msg struct {
-	Index  int
-	Lenght int
-	Value  byte
-}
 
 // This constants represents all possible actions in the cpu
 const (
@@ -26,6 +16,29 @@ const (
 	Imul
 )
 
+// This constants represents all possible types of messages
+const (
+	CALL = iota
+	MEMORY
+	LITERAL
+	REGISTER
+)
+
+// Encoder is an parser type
+type Encoder struct {
+	wordLength int
+	registers  map[string]int
+}
+
+// Msg is the payload type of the bus
+type Msg struct {
+	Key    int
+	Type   int
+	Index  int
+	Lenght int
+	Value  byte
+}
+
 var actions = map[string]byte{
 	"mov":  Mov,
 	"add":  Add,
@@ -33,6 +46,7 @@ var actions = map[string]byte{
 	"imul": Imul,
 }
 
+// NewEncoder instanciate an returns an encoder
 func NewEncoder(registers []string, word int) Encoder {
 	rgs := make(map[string]int)
 
@@ -43,13 +57,23 @@ func NewEncoder(registers []string, word int) Encoder {
 	return Encoder{registers: rgs, wordLength: word}
 }
 
-func (encoder *Encoder) encode(action string, params []string) []byte {
-	payload := encoder.expandValue(int(getAction(action)))
-	return append(payload, encoder.mapParams(params)...)
+func (encoder *Encoder) encode(action string, params []string) []Msg {
+	key := rand.Intn(999999)
+	payload := encoder.expandValue(int(getAction(action)), CALL)
+	payload = append(payload, encoder.mapParams(params)...)
+
+	for index := range payload {
+		payload[index].Key = key
+		payload[index].Lenght = len(payload)
+		payload[index].Index = index
+	}
+
+	return payload
 }
 
-func (encoder *Encoder) Parse(code string) [][]byte {
-	var exprs [][]byte
+// Parse parses an string into an matrix of bytes
+func (encoder *Encoder) Parse(code string) [][]Msg {
+	var exprs [][]Msg
 	lines := strings.Split(code, ";")
 
 	for _, line := range lines {
@@ -69,8 +93,8 @@ func (encoder *Encoder) Parse(code string) [][]byte {
 	return exprs
 }
 
-func (encoder *Encoder) mapParams(params []string) []byte {
-	var prs []byte
+func (encoder *Encoder) mapParams(params []string) []Msg {
+	var prs []Msg
 
 	for _, param := range params {
 		if strings.HasPrefix(param, "0x") {
@@ -81,7 +105,7 @@ func (encoder *Encoder) mapParams(params []string) []byte {
 				utils.Abort("Cannot convert value")
 			}
 
-			prs = append(prs, encoder.expandValue(int(value))...)
+			prs = append(prs, encoder.expandValue(int(value), MEMORY)...)
 		} else {
 			value, err := strconv.Atoi(param)
 
@@ -91,12 +115,12 @@ func (encoder *Encoder) mapParams(params []string) []byte {
 
 				// If register is 0, then there is no register defined with that name
 				if register != 0 {
-					prs = append(prs, encoder.expandValue(int(register))...)
+					prs = append(prs, encoder.expandValue(int(register), REGISTER)...)
 				} else {
 					utils.Abort("Invalid register")
 				}
 			} else {
-				prs = append(prs, encoder.expandValue(value)...)
+				prs = append(prs, encoder.expandValue(value, LITERAL)...)
 			}
 
 		}
@@ -105,8 +129,20 @@ func (encoder *Encoder) mapParams(params []string) []byte {
 	return prs
 }
 
-func (encoder *Encoder) expandValue(value int) []byte {
-	return utils.ToBytes(encoder.wordLength, value)
+func (encoder *Encoder) expandValue(value int, msgType int) []Msg {
+	var msgs []Msg
+	bytes := utils.ToBytes(encoder.wordLength, value)
+
+	for _, value := range bytes {
+		msg := Msg{
+			Value: value,
+			Type:  msgType,
+		}
+
+		msgs = append(msgs, msg)
+	}
+
+	return msgs
 }
 
 func getAction(action string) byte {

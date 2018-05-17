@@ -4,27 +4,30 @@ import (
 	"github.com/bruunoromero/cpu-emulator/utils"
 )
 
+// Decoder is an parser type
 type Decoder struct {
 	wordLength int
 }
 
-type action struct {
-	action     int
-	location   int
-	isRegister bool
-	params     []value
+// Action represents an expression
+type Action struct {
+	Action     int
+	Location   int
+	IsRegister bool
+	Params     []Value
 }
 
-type value struct {
-	value      int
-	isRegister bool
+// Value represents a parameter
+type Value struct {
+	Value      int
+	IsRegister bool
 }
 
+// NewDecoder instanciate an returns a Decoder
 func NewDecoder(word int) Decoder {
 	return Decoder{
 		wordLength: word,
 	}
-
 }
 
 func makeChunks(size int, arr []byte) [][]byte {
@@ -43,31 +46,32 @@ func makeChunks(size int, arr []byte) [][]byte {
 	return divided
 }
 
-func (decoder *Decoder) Decode(payload []byte) action {
-	action := action{
-		params: make([]value, 0),
+// Decode decodes an array of messages into an action
+func (decoder *Decoder) Decode(payload []byte) Action {
+	action := Action{
+		Params: make([]Value, 0),
 	}
 
 	numBytes := decoder.wordLength / 8
 
-	action.isRegister = true
-	action.location = -(utils.FromBytes(decoder.wordLength, payload[numBytes:numBytes*2]) + 1)
+	action.IsRegister = true
+	action.Location = -(utils.FromBytes(decoder.wordLength, payload[numBytes:numBytes*2]) + 1)
 
-	action.action = utils.FromBytes(decoder.wordLength, payload[:numBytes])
+	action.Action = utils.FromBytes(decoder.wordLength, payload[:numBytes])
 	chunks := makeChunks(numBytes, payload[numBytes*2:])
 
 	for _, chunk := range chunks {
 		v := utils.FromBytes(decoder.wordLength, chunk)
-		vl := value{}
-		vl.isRegister = v < 0
+		vl := Value{}
+		vl.IsRegister = v < 0
 
-		if vl.isRegister {
-			vl.value = -(v + 1)
+		if vl.IsRegister {
+			vl.Value = -(v + 1)
 		} else {
-			vl.value = v
+			vl.Value = v
 		}
 
-		action.params = append(action.params, vl)
+		action.Params = append(action.Params, vl)
 	}
 
 	return action
