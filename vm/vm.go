@@ -11,9 +11,9 @@ import (
 var once sync.Once
 
 // Start initiates the Von Neumann loop
-func Start(registers []string, wordLength int, memoryLength int) {
+func Start(registers []string, busLength int, wordLength int, memoryLength int) {
 	once.Do(func() {
-		bus := bus.New(10, 10)
+		bus := bus.New(10, busLength)
 		io := io.New(registers, wordLength)
 		memory := memory.New(memoryLength, wordLength)
 		// cpu := cpu.New(len(registers), wordLength, (memoryLength/(wordLength/8))/4)

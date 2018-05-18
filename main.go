@@ -32,8 +32,22 @@ func getMemoryLengh() int {
 	}
 }
 
+func getBusLength() int {
+	var vl int
+
+	fmt.Println("Qual o tamano da largura do barramento em bytes (8, 16, 32): ")
+
+	for {
+		fmt.Scanf("%d", &vl)
+		if vl == 8 || vl == 16 || vl == 32 {
+			return int(vl)
+		}
+	}
+}
+
 func main() {
 
+	bus := getBusLength()
 	word := getWordLengh()
 	memory := getMemoryLengh()
 
@@ -45,6 +59,6 @@ func main() {
 	fmt.Println("Log: VM Started")
 	fmt.Println("")
 
-	vm.Start([]string{"A", "B", "C", "D", "E"}, word, memory)
+	vm.Start([]string{"A", "B", "C", "D", "E"}, bus, word, memory)
 
 }
