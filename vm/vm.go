@@ -21,7 +21,7 @@ func Start(registers []string, busLength int, wordLength int, memoryLength int) 
 		bus.MakeChannel("cpu")
 		bus.MakeChannel("memory")
 
-		bus.Start()
+		bus.Run()
 		memory.Run(bus)
 		// cpu.Run(bus)
 		io.Run(bus)

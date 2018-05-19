@@ -35,7 +35,7 @@ func New(registers int, word int, memory int) Instance {
 func (cpu *cpu) Run(bus b.Instance) {
 	go func() {
 		for {
-			v := <-bus.ReceiveFrom("cpu")
+			v := bus.ReceiveFrom("cpu")
 			if v.Signal == b.WRITE {
 				bus.SendTo("memory", "cpu", b.READ, []byte{byte(cpu.pi)})
 
@@ -45,23 +45,20 @@ func (cpu *cpu) Run(bus b.Instance) {
 					cpu.pi++
 				}
 
-				select {
-				case vl := <-bus.ReceiveFrom("cpu"):
-					instruction := cpu.decoder.Decode(vl.Payload)
+				vl := bus.ReceiveFrom("cpu")
+				instruction := cpu.decoder.Decode(vl.Payload)
 
-					if instruction.isRegister {
-						switch instruction.action {
-						case io.Inc:
-							cpu.add(instruction.location, []parser.Value{value{isRegister: false, value: 1}})
-						case io.Add:
-							cpu.add(instruction.location, instruction.params)
-						case io.Mov:
-							cpu.mov(instruction.location, instruction.params)
-						case io.Imul:
-							cpu.imul(instruction.location, instruction.params)
-						}
+				if instruction.IsRegister {
+					switch instruction.Action {
+					case io.Inc:
+						cpu.add(instruction.location, []parser.Value{value{isRegister: false, value: 1}})
+					case io.Add:
+						cpu.add(instruction.location, instruction.params)
+					case io.Mov:
+						cpu.mov(instruction.location, instruction.params)
+					case io.Imul:
+						cpu.imul(instruction.location, instruction.params)
 					}
-
 				}
 			}
 

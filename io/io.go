@@ -49,9 +49,10 @@ func (io *io) Run(bus b.Instance) {
 		scanner := bufio.NewScanner(inFile)
 		scanner.Split(bufio.ScanLines)
 
+		codeIndex := 0
 		for scanner.Scan() {
-
-			exprs := io.encoder.Parse(scanner.Text())
+			exprs := io.encoder.Parse(codeIndex, scanner.Text())
+			codeIndex++
 
 			for _, expr := range exprs {
 				io.read <- expr

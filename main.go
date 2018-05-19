@@ -19,19 +19,6 @@ func getWordLengh() int {
 	}
 }
 
-func getMemoryLengh() int {
-	var vl int
-
-	fmt.Println("Qual o tamano da ram em bytes (8, 16, 32): ")
-
-	for {
-		fmt.Scanf("%d", &vl)
-		if vl == 8 || vl == 16 || vl == 32 {
-			return int(vl)
-		}
-	}
-}
-
 func getBusLength() int {
 	var vl int
 
@@ -49,7 +36,6 @@ func main() {
 
 	bus := getBusLength()
 	word := getWordLengh()
-	memory := getMemoryLengh()
 
 	fmt.Println("")
 	fmt.Println("-----------------------")
@@ -59,6 +45,5 @@ func main() {
 	fmt.Println("Log: VM Started")
 	fmt.Println("")
 
-	vm.Start([]string{"A", "B", "C", "D", "E"}, bus, word, memory)
-
+	vm.Start([]string{"A", "B", "C", "D", "E"}, bus, word, 1024)
 }

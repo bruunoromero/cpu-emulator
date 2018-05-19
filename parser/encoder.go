@@ -1,7 +1,6 @@
 package parser
 
 import (
-	"math/rand"
 	"strconv"
 	"strings"
 
@@ -57,22 +56,21 @@ func NewEncoder(registers []string, word int) Encoder {
 	return Encoder{registers: rgs, wordLength: word}
 }
 
-func (encoder *Encoder) encode(action string, params []string) []Msg {
-	key := rand.Intn(999999)
+func (encoder *Encoder) encode(key int, action string, params []string) []Msg {
 	payload := encoder.expandValue(int(getAction(action)), CALL)
 	payload = append(payload, encoder.mapParams(params)...)
 
 	for index := range payload {
 		payload[index].Key = key
-		payload[index].Lenght = len(payload)
 		payload[index].Index = index
+		payload[index].Lenght = len(payload) - 1
 	}
 
 	return payload
 }
 
 // Parse parses an string into an matrix of bytes
-func (encoder *Encoder) Parse(code string) [][]Msg {
+func (encoder *Encoder) Parse(codeIndex int, code string) [][]Msg {
 	var exprs [][]Msg
 	lines := strings.Split(code, ";")
 
@@ -84,7 +82,7 @@ func (encoder *Encoder) Parse(code string) [][]Msg {
 			action := values[0]
 			params := values[1:len(values)]
 
-			expr := encoder.encode(action, params)
+			expr := encoder.encode(codeIndex, action, params)
 			exprs = append(exprs, expr)
 		}
 

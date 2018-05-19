@@ -14,25 +14,16 @@ type bus struct {
 	channels  map[string]chan msg
 }
 
-type action struct {
-	origin  string
-	payload []parser.Msg
+type Action struct {
+	Signal  int
+	Origin  string
+	Payload []parser.Msg
 }
 
 // Msg represents a message to be received from the bus
 type msg struct {
-	signal  int
 	channel string
-	action  action
-}
-
-// Message represents a message to be sent through the bus
-type Message struct {
-	Signal      int
-	Origin      string
-	Address     []parser.Msg
-	Data        []parser.Msg
-	Instruction []parser.Msg
+	action  Action
 }
 
 // READ and WRITE are the possible signals of an bus operation
@@ -54,9 +45,9 @@ var lanes = []string{ADDRESS, DATA, INSTUCTION}
 
 // Instance is the interface of the bus type
 type Instance interface {
-	Start()
+	Run()
 	MakeChannel(string)
-	ReceiveFrom(string) Message
+	ReceiveFrom(string) *Action
 	SendTo(string, string, int, []parser.Msg)
 }
 
@@ -94,30 +85,19 @@ func (bus *bus) SendTo(channel string, origin string, signal int, payload []pars
 
 	for _, category := range expandedLanes {
 		for lane, msgs := range category {
-			act := action{payload: msgs, origin: origin}
-			bus.buffer.PushBack(msg{signal: signal, channel: channel + lane, action: act})
+			act := Action{Payload: msgs, Origin: origin, Signal: signal}
+			bus.buffer.PushBack(msg{channel: channel + lane, action: act})
 		}
 	}
 }
 
-func (bus *bus) ReceiveFrom(channel string) Message {
-	values := make(map[string][]parser.Msg)
-
-	message := Message{}
-	for _, lane := range lanes {
-		msg := <-bus.channels[channel+lane]
-
-		values[lane] = msg.action.payload
-
-		message.Signal = msg.signal
-		message.Origin = msg.action.origin
+func (bus *bus) ReceiveFrom(channel string) *Action {
+	select {
+	case msg := <-bus.channels[channel]:
+		return &msg.action
+	default:
+		return nil
 	}
-
-	message.Data = values[DATA]
-	message.Address = values[ADDRESS]
-	message.Instruction = values[INSTUCTION]
-
-	return message
 }
 
 func (bus *bus) expandCategories(categories map[string][]parser.Msg) []map[string][]parser.Msg {
@@ -170,7 +150,7 @@ func categorizeMsgs(msgs []parser.Msg) map[string][]parser.Msg {
 func (bus *bus) send(front *list.Element, channelsLength map[string]int) bool {
 	if front != nil {
 		el := front.Value.(msg)
-		size := len(el.action.payload) * 8
+		size := len(el.action.Payload) * 8
 		if channelsLength[el.channel]+size <= bus.length {
 			channelsLength[el.channel] += size
 			go func() {
@@ -183,7 +163,7 @@ func (bus *bus) send(front *list.Element, channelsLength map[string]int) bool {
 	return false
 }
 
-func (bus *bus) Start() {
+func (bus *bus) Run() {
 	go func() {
 		for {
 			sent := make([]*list.Element, 0)
