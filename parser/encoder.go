@@ -35,7 +35,9 @@ type Msg struct {
 	Type   int
 	Index  int
 	Lenght int
+	Signal int
 	Value  byte
+	Origin string
 }
 
 var actions = map[string]byte{

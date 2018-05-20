@@ -1,7 +1,6 @@
 package memory
 
 import (
-	"fmt"
 	"time"
 
 	b "github.com/bruunoromero/cpu-emulator/bus"
@@ -12,16 +11,16 @@ import (
 type memory struct {
 	wordLength        int
 	lastWritePosition int
-	list              [][]byte
+	list              [][]parser.Msg
 	messageQueue      []parser.Msg
 	decoder           parser.Decoder
 }
 
 // Instance is the interface for the memory type
 type Instance interface {
-	write([]byte)
-	read(byte) []byte
 	Run(bus b.Instance)
+	read(byte) []parser.Msg
+	write(int, []parser.Msg) int
 }
 
 // New returns a new instance of Memory
@@ -39,7 +38,7 @@ func New(size int, wordLength int) Instance {
 		lastWritePosition: 0,
 		wordLength:        wordLength,
 		messageQueue:      make([]parser.Msg, 0),
-		list:              make([][]byte, length),
+		list:              make([][]parser.Msg, length),
 		decoder:           parser.NewDecoder(wordLength),
 	}
 }
@@ -47,59 +46,47 @@ func New(size int, wordLength int) Instance {
 func (memory *memory) Run(bus b.Instance) {
 	go func() {
 		for {
-			memory.getMessage(bus)
-			// fmt.Println(memory.getMessage(bus))
-			// if value.Signal == b.READ {
-			// 	// bus.SendTo(value.Origin, "memory", b.WRITE, memory.read(value.Payload[0]))
-			// } else {
-			// 	// memory.write(value.Payload)
-			// }
+			data := bus.ReceiveFrom("memoryData")
+			address := bus.ReceiveFrom("memoryAddress")
+			instructions := bus.ReceiveFrom("memoryInstruction")
+
+			messages := memory.decoder.GetMessagesWithQueue(address.Payload, data.Payload, instructions.Payload, &memory.messageQueue)
+
+			for _, message := range messages {
+				if len(message) > 0 {
+					msg := message[0]
+
+					if msg.Signal == b.WRITE {
+						if msg.Origin == "io" {
+							position := memory.write(0, message)
+							bus.SendTo("cpu", "memory", b.READ, []parser.Msg{parser.Msg{Key: position, Index: 0, Lenght: 0, Type: parser.REGISTER, Value: byte(position)}})
+						} else if msg.Origin == "cpu" {
+							memory.write(len(memory.list)/2, message)
+						}
+					} else if msg.Signal == b.READ {
+						v := memory.read(msg.Value)
+						bus.SendTo(msg.Origin, "memory", b.WRITE, v)
+					}
+				}
+			}
+
 			time.Sleep(time.Second / 2)
 		}
 	}()
 }
 
-func (memory *memory) getMessage(bus b.Instance) *parser.Message {
-	data := bus.ReceiveFrom("memoryData")
-	address := bus.ReceiveFrom("memoryAddress")
-	instructions := bus.ReceiveFrom("memoryInstruction")
-
-	msg := make([]parser.Msg, 0)
-
-	if data != nil {
-		msg = append(msg, data.Payload...)
-	}
-
-	if address != nil {
-		msg = append(msg, address.Payload...)
-	}
-
-	if instructions != nil {
-		msg = append(msg, instructions.Payload...)
-	}
-
-	memory.messageQueue = append(memory.messageQueue, msg...)
-
-	groups := memory.decoder.GroupMessages(memory.messageQueue)
-
-	for _, msgs := range groups {
-		if memory.decoder.IsMsgComplete(msgs) {
-			fmt.Println("ola")
-		}
-	}
-
-	return nil
-}
-
-func (memory *memory) read(payload byte) []byte {
+func (memory *memory) read(payload byte) []parser.Msg {
 	return memory.list[payload]
 }
 
-func (memory *memory) write(payload []byte) {
+func (memory *memory) write(offset int, payload []parser.Msg) int {
 	if memory.lastWritePosition == len(memory.list) {
 		memory.lastWritePosition = 0
 	}
 
-	memory.list[memory.lastWritePosition] = payload
+	position := memory.lastWritePosition + offset
+	memory.list[position] = payload
 	memory.lastWritePosition++
+
+	return position
 }

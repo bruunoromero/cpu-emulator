@@ -2,6 +2,7 @@ package parser
 
 import (
 	"github.com/bradfitz/slice"
+	"github.com/bruunoromero/cpu-emulator/utils"
 )
 
 // Decoder is an parser type
@@ -12,23 +13,15 @@ type Decoder struct {
 // Action represents an expression
 type Action struct {
 	Action     int
-	Location   int
-	IsRegister bool
-	Params     []Value
+	Signal     int
+	Origin     int
+	Location   Parameter
+	Parameters []Parameter
 }
 
-type Message struct {
-	Signal      int
-	Origin      string
-	Data        []Msg
-	Address     []Msg
-	Inctruction []Msg
-}
-
-// Value represents a parameter
-type Value struct {
-	Value      int
-	IsRegister bool
+type Parameter struct {
+	Value int
+	Type  int
 }
 
 // NewDecoder instanciate an returns a Decoder
@@ -38,8 +31,8 @@ func NewDecoder(word int) Decoder {
 	}
 }
 
-func makeChunks(size int, arr []Message) [][]Message {
-	var divided [][]Message
+func makeChunks(size int, arr []Msg) [][]Msg {
+	var divided [][]Msg
 
 	for i := 0; i < len(arr); i += size {
 		end := i + size
@@ -54,33 +47,44 @@ func makeChunks(size int, arr []Message) [][]Message {
 	return divided
 }
 
-func (decoder *Decoder) IsMsgComplete(msg []Msg) bool {
-	slice.Sort(msg, func(left int, right int) bool {
-		return msg[left].Index < msg[right].Index
-	})
+func (decoder *Decoder) isMsgComplete(msg []Msg) bool {
+	if len(msg) == 0 {
+		return false
+	}
 
-	lastMsg := msg[len(msg)-1]
-	return lastMsg.Lenght == lastMsg.Index
+	firstMsg := msg[0]
+	return firstMsg.Lenght == len(msg)-1
 }
 
-func (decoder *Decoder) GroupMessages(msgs []Msg) [][]Msg {
+func (decoder *Decoder) groupMessages(msgs []Msg) [][]Msg {
 	groups := make([][]Msg, 0)
+	tmp := make([]Msg, len(msgs))
+	copy(tmp, msgs)
 
-	slice.Sort(msgs, func(left int, right int) bool {
-		return msgs[left].Key < msgs[right].Key
+	slice.Sort(tmp, func(left int, right int) bool {
+		return tmp[left].Key < tmp[right].Key
 	})
 
 	group := make([]Msg, 0)
-	for index, msg := range msgs {
+	for index, msg := range tmp {
 		if index == 0 {
 			group = append(group, msg)
+
+			if index == len(tmp)-1 {
+				groups = append(groups, group)
+			}
 		} else {
-			if msgs[index-1].Key == msg.Key {
+			if tmp[index-1].Key == msg.Key {
 				group = append(group, msg)
+
+				if index == len(tmp)-1 {
+					groups = append(groups, group)
+				}
+
 			} else {
 				groups = append(groups, group)
 
-				group := make([]Msg, 0)
+				group = make([]Msg, 0)
 				group = append(group, msg)
 			}
 		}
@@ -89,33 +93,116 @@ func (decoder *Decoder) GroupMessages(msgs []Msg) [][]Msg {
 	return groups
 }
 
+func mapSlice(vs []Msg, f func(Msg) byte) []byte {
+	vsm := make([]byte, len(vs))
+	for i, v := range vs {
+		vsm[i] = f(v)
+	}
+	return vsm
+}
+
+func getValue(msg Msg) byte {
+	return msg.Value
+}
+
 // Decode decodes an array of messages into an action
-func (decoder *Decoder) Decode(payload []Message) Action {
+func (decoder *Decoder) Decode(payload []Msg) Action {
+
+	tmp := make([]Msg, len(payload))
+	copy(tmp, payload)
+
+	slice.Sort(tmp, func(left int, right int) bool {
+		return tmp[left].Index < tmp[right].Index
+	})
+
+	numBytes := decoder.wordLength / 8
+
+	actionValue := mapSlice(tmp[:numBytes], getValue)
+	locationValue := mapSlice(tmp[numBytes:numBytes*2], getValue)
+
 	action := Action{
-		Params: make([]Value, 0),
+		Action: utils.FromBytes(decoder.wordLength, actionValue),
 	}
 
-	// numBytes := decoder.wordLength / 8
+	msg := tmp[numBytes]
+	value := utils.FromBytes(decoder.wordLength, locationValue)
 
-	// action.IsRegister = true
-	// action.Location = -(utils.FromBytes(decoder.wordLength, payload[numBytes:numBytes*2]) + 1)
+	if msg.Type == REGISTER {
+		value = -(value + 1)
+	}
 
-	// action.Action = utils.FromBytes(decoder.wordLength, payload[:numBytes])
-	// chunks := makeChunks(numBytes, payload[numBytes*2:])
+	action.Location = Parameter{
+		Type:  msg.Type,
+		Value: value,
+	}
 
-	// for _, chunk := range chunks {
-	// 	v := utils.FromBytes(decoder.wordLength, chunk)
-	// 	vl := Value{}
-	// 	vl.IsRegister = v < 0
+	chunks := makeChunks(numBytes, tmp[numBytes*2:])
 
-	// 	if vl.IsRegister {
-	// 		vl.Value = -(v + 1)
-	// 	} else {
-	// 		vl.Value = v
-	// 	}
+	for _, chunk := range chunks {
+		chunkValue := mapSlice(chunk, getValue)
 
-	// 	action.Params = append(action.Params, vl)
-	// }
+		v := utils.FromBytes(decoder.wordLength, chunkValue)
+		vl := Parameter{}
+
+		vl.Type = chunk[0].Type
+
+		if vl.Type == REGISTER {
+			vl.Value = (v + 1) * -1
+		} else {
+			vl.Value = v
+		}
+
+		action.Parameters = append(action.Parameters, vl)
+	}
 
 	return action
+}
+
+func (decoder *Decoder) GetMessagesWithQueue(address []Msg, data []Msg, instructions []Msg, queue *[]Msg) [][]Msg {
+	messages := make([][]Msg, 0)
+
+	msg := make([]Msg, 0)
+
+	if data != nil {
+		msg = append(msg, data...)
+	}
+
+	if address != nil {
+		msg = append(msg, address...)
+	}
+
+	if instructions != nil {
+		msg = append(msg, instructions...)
+	}
+
+	*queue = append(*queue, msg...)
+
+	groups := decoder.groupMessages(*queue)
+
+	for _, msgs := range groups {
+		if !decoder.isMsgComplete(msgs) {
+			break
+		}
+
+		messages = append(messages, msgs)
+		*queue = decoder.removeMessagesFromQueue(msgs, *queue)
+	}
+
+	return messages
+}
+
+func (decoder *Decoder) removeMessagesFromQueue(msgs []Msg, queue []Msg) []Msg {
+	tmp := make([]Msg, len(queue))
+
+	copy(tmp, queue)
+
+	for _, msg := range msgs {
+		for index, queueMsg := range tmp {
+			if queueMsg == msg {
+				tmp = append(tmp[:index], tmp[index+1:]...)
+			}
+		}
+	}
+
+	return tmp
 }

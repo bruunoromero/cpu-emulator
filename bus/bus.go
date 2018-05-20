@@ -85,6 +85,11 @@ func (bus *bus) SendTo(channel string, origin string, signal int, payload []pars
 
 	for _, category := range expandedLanes {
 		for lane, msgs := range category {
+			for i := range msgs {
+				msgs[i].Signal = signal
+				msgs[i].Origin = origin
+			}
+
 			act := Action{Payload: msgs, Origin: origin, Signal: signal}
 			bus.buffer.PushBack(msg{channel: channel + lane, action: act})
 		}
@@ -96,7 +101,7 @@ func (bus *bus) ReceiveFrom(channel string) *Action {
 	case msg := <-bus.channels[channel]:
 		return &msg.action
 	default:
-		return nil
+		return &Action{}
 	}
 }
 

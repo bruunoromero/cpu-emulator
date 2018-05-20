@@ -1,4 +1,2 @@
-mov A, 2
 inc A
-mov B, 2
-add A, B
+mov 0x001, 2
