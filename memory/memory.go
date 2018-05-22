@@ -9,6 +9,7 @@ import (
 )
 
 type memory struct {
+	frequency         int
 	wordLength        int
 	lastWritePosition int
 	list              [][]parser.Msg
@@ -19,12 +20,13 @@ type memory struct {
 // Instance is the interface for the memory type
 type Instance interface {
 	Run(bus b.Instance)
-	read(byte) []parser.Msg
+	Read(byte) []parser.Msg
+	Write(byte, []parser.Msg)
 	write(int, []parser.Msg) int
 }
 
 // New returns a new instance of Memory
-func New(size int, wordLength int) Instance {
+func New(size int, wordLength int, frequency int) Instance {
 	wordLengthByte := wordLength / 8
 
 	maxWords := size / wordLengthByte
@@ -36,6 +38,7 @@ func New(size int, wordLength int) Instance {
 
 	return &memory{
 		lastWritePosition: 0,
+		frequency:         frequency,
 		wordLength:        wordLength,
 		messageQueue:      make([]parser.Msg, 0),
 		list:              make([][]parser.Msg, length),
@@ -64,19 +67,23 @@ func (memory *memory) Run(bus b.Instance) {
 							memory.write(len(memory.list)/2, message)
 						}
 					} else if msg.Signal == b.READ {
-						v := memory.read(msg.Value)
+						v := memory.Read(msg.Value)
 						bus.SendTo(msg.Origin, "memory", b.WRITE, v)
 					}
 				}
 			}
 
-			time.Sleep(time.Second / 2)
+			time.Sleep(time.Second / (time.Duration(memory.frequency) * 4))
 		}
 	}()
 }
 
-func (memory *memory) read(payload byte) []parser.Msg {
+func (memory *memory) Read(payload byte) []parser.Msg {
 	return memory.list[payload]
+}
+
+func (memory *memory) Write(position byte, payload []parser.Msg) {
+	memory.list[position] = payload
 }
 
 func (memory *memory) write(offset int, payload []parser.Msg) int {

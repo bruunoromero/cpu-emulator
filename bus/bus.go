@@ -153,7 +153,7 @@ func categorizeMsgs(msgs []parser.Msg) map[string][]parser.Msg {
 }
 
 func (bus *bus) send(front *list.Element, channelsLength map[string]int) bool {
-	if front != nil {
+	if front != nil && front.Value != nil {
 		el := front.Value.(msg)
 		size := len(el.action.Payload) * 8
 		if channelsLength[el.channel]+size <= bus.length {
@@ -183,7 +183,7 @@ func (bus *bus) Run() {
 				bus.buffer.Remove(msg)
 			}
 
-			time.Sleep(time.Second)
+			time.Sleep(time.Second / time.Duration(bus.frequency))
 		}
 	}()
 }

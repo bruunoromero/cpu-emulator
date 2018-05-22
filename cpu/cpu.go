@@ -2,7 +2,10 @@ package cpu
 
 import (
 	"fmt"
+	"strconv"
 	"time"
+
+	"github.com/bruunoromero/cpu-emulator/memory"
 
 	"github.com/bradfitz/slice"
 
@@ -13,10 +16,15 @@ import (
 
 type cpu struct {
 	pi             int
+	memoryOffest   int
 	executionIndex int
+	wordLenth      int
+	frequency      int
 	registers      []int
 	messageQueue   []parser.Msg
+	encoder        parser.Encoder
 	decoder        parser.Decoder
+	memory         memory.Instance
 	executionMap   map[int][]parser.Msg
 }
 
@@ -29,15 +37,32 @@ type Instance interface {
 }
 
 // New returns a new instance of CPU
-func New(registers int, word int, memory int) Instance {
+func New(registers int, word int, memory int, frequency int, memoryI memory.Instance, encoder parser.Encoder) Instance {
 	return &cpu{
-		pi:             -1,
 		executionIndex: 0,
+		pi:             -1,
+		wordLenth:      word,
+		memory:         memoryI,
+		encoder:        encoder,
+		frequency:      frequency,
+		memoryOffest:   (memory / 2) - 1,
 		messageQueue:   make([]parser.Msg, 0),
 		registers:      make([]int, registers),
 		decoder:        parser.NewDecoder(word),
 		executionMap:   make(map[int][]parser.Msg),
 	}
+}
+
+func mapSlice(vs []parser.Msg, f func(parser.Msg) byte) []byte {
+	vsm := make([]byte, len(vs))
+	for i, v := range vs {
+		vsm[i] = f(v)
+	}
+	return vsm
+}
+
+func getValue(msg parser.Msg) byte {
+	return msg.Value
 }
 
 func (cpu *cpu) Run(bus b.Instance) {
@@ -65,38 +90,95 @@ func (cpu *cpu) Run(bus b.Instance) {
 						cpu.pi++
 						bus.SendTo("memory", "cpu", b.READ, []parser.Msg{parser.Msg{Key: int(msg.Value), Index: 0, Lenght: 0, Type: parser.MEMORY, Value: msg.Value}})
 					} else {
+
 						cpu.executionMap[msg.Key] = message
 						if cpu.executionMap[cpu.executionIndex] == nil {
 							continue
 						}
 
-						cpu.executionIndex++
-						instruction := cpu.decoder.Decode(message)
+						instruction := cpu.decoder.Decode(cpu.executionMap[cpu.executionIndex])
 
-						// 1. CHECK IF ALL VALUES ARE NOT FROM MEMORY, OTHERWISE GET VELUES FROM MEMORY
-						// AND DECREMENT EXECUTIONINDEX TO REEXECUTE THE SAME INSTRUCTION WITH THE RAW VALUE
-						// PICKED FROM MEMORY
-
-						// 2. IF LOCATION IS MEMORY SEND A MESSAGE TO MEMORY, IF NOT THEN USE THE CODE BELOW
-
-						switch instruction.Action {
-						case parser.Inc:
-							cpu.add(instruction.Location, []parser.Parameter{parser.Parameter{Type: parser.LITERAL, Value: 1}})
-						case parser.Add:
-							cpu.add(instruction.Location, instruction.Parameters)
-						case parser.Mov:
-							cpu.mov(instruction.Location, instruction.Parameters)
-						case parser.Imul:
-							cpu.imul(instruction.Location, instruction.Parameters)
+						for index, parameter := range instruction.Parameters {
+							if parameter.Type == parser.MEMORY {
+								instruction.Parameters[index] = cpu.resolveParameter(parameter)
+							}
 						}
+
+						switch instruction.Location.Type {
+						case parser.MEMORY:
+							cpu.executeOnMemory(instruction)
+						case parser.REGISTER:
+							cpu.executeOnRegister(instruction)
+						}
+						cpu.executionIndex++
 					}
 				}
 			}
 
-			fmt.Println(cpu.registers)
-			time.Sleep(time.Second / 2)
+			time.Sleep(time.Second / (time.Duration(cpu.frequency) * 4))
 		}
 	}()
+}
+
+func (cpu *cpu) resolveParameter(parameter parser.Parameter) parser.Parameter {
+	msg := cpu.memory.Read(byte(parameter.Value + cpu.memoryOffest))
+	bytes := mapSlice(msg, getValue)
+	value := utils.FromBytes(cpu.wordLenth, bytes)
+
+	return parser.Parameter{
+		Value: value,
+		Type:  parser.LITERAL,
+	}
+}
+
+func (cpu *cpu) executeOnRegister(instruction parser.Action) {
+	switch instruction.Action {
+	case parser.Inc:
+		cpu.add(instruction.Location, []parser.Parameter{parser.Parameter{Type: parser.LITERAL, Value: 1}})
+	case parser.Add:
+		cpu.add(instruction.Location, instruction.Parameters)
+	case parser.Mov:
+		cpu.mov(instruction.Location, instruction.Parameters)
+	case parser.Imul:
+		cpu.imul(instruction.Location, instruction.Parameters)
+	}
+
+	fmt.Println("registers", cpu.registers)
+}
+
+func (cpu *cpu) executeOnMemory(instruction parser.Action) {
+	switch instruction.Action {
+	case parser.Inc:
+		cpu.incOnMemory(instruction.Location)
+	case parser.Add:
+		cpu.addOnMemory(instruction.Location, instruction.Parameters)
+	case parser.Mov:
+		cpu.movOnMemory(instruction.Location, instruction.Parameters)
+	case parser.Imul:
+		cpu.imulOnMemory(instruction.Location, instruction.Parameters)
+	}
+}
+
+func (cpu *cpu) getFirstChunkOfType(msgs []parser.Msg, t int) []parser.Msg {
+	chunks := cpu.decoder.MakeChunks(msgs)
+
+	for _, chunk := range chunks {
+		if chunk[0].Type == t {
+			return chunk
+		}
+	}
+
+	return nil
+}
+
+func findFirstUnresolved(params []parser.Parameter) *parser.Parameter {
+	for _, param := range params {
+		if param.Type == parser.MEMORY {
+			return &param
+		}
+	}
+
+	return nil
 }
 
 func checkLengthOrAbort(params []parser.Parameter, length int, callback func()) {
@@ -114,13 +196,8 @@ func (cpu *cpu) extractValue(value parser.Parameter) int {
 		return value.Value
 	}
 
-	fmt.Println(value.Type, value.Value)
 	utils.Abort("undefined type")
 	return 0
-}
-
-func (cpu *cpu) extractValueFromMemory(value parser.Parameter) {
-
 }
 
 func (cpu *cpu) mov(register parser.Parameter, params []parser.Parameter) {
@@ -145,6 +222,48 @@ func (cpu *cpu) imul(register parser.Parameter, params []parser.Parameter) {
 		value2 := params[1]
 		cpu.set(register, cpu.extractValue(value1)*cpu.extractValue(value2))
 	})
+}
+
+func (cpu *cpu) movOnMemory(memory parser.Parameter, params []parser.Parameter) {
+	checkLengthOrAbort(params, 1, func() {
+		value := cpu.extractValue(params[0])
+		message := cpu.encoder.MapParams([]string{strconv.Itoa(value)})
+
+		fmt.Println("mov on memory position: ", memory.Value+cpu.memoryOffest, "; value: ", message)
+		cpu.memory.Write(byte(memory.Value+cpu.memoryOffest), message)
+	})
+}
+
+func (cpu *cpu) addOnMemory(memory parser.Parameter, params []parser.Parameter) {
+	checkLengthOrAbort(params, 1, func() {
+		memoryValue := cpu.resolveParameter(memory)
+		v := cpu.extractValue(params[0])
+		value := v + memoryValue.Value
+		message := cpu.encoder.MapParams([]string{strconv.Itoa(value)})
+
+		fmt.Println("add on memory position: ", memory.Value+cpu.memoryOffest, "; value: ", message)
+		cpu.memory.Write(byte(memory.Value+cpu.memoryOffest), message)
+	})
+}
+
+func (cpu *cpu) imulOnMemory(memory parser.Parameter, params []parser.Parameter) {
+	checkLengthOrAbort(params, 2, func() {
+		v0 := cpu.extractValue(params[0])
+		v1 := cpu.extractValue(params[1])
+		value := v0 * v1
+		message := cpu.encoder.MapParams([]string{strconv.Itoa(value)})
+
+		fmt.Println("imul on memory position: ", memory.Value+cpu.memoryOffest, "; value: ", message)
+		cpu.memory.Write(byte(memory.Value+cpu.memoryOffest), message)
+	})
+}
+
+func (cpu *cpu) incOnMemory(memory parser.Parameter) {
+	memoryValue := cpu.resolveParameter(memory)
+	value := memoryValue.Value + 1
+	message := cpu.encoder.MapParams([]string{strconv.Itoa(value)})
+	fmt.Println("inc on memory position: ", memory.Value+cpu.memoryOffest, "; value: ", message)
+	cpu.memory.Write(byte(memory.Value+cpu.memoryOffest), message)
 }
 
 func (cpu *cpu) set(location parser.Parameter, value int) {

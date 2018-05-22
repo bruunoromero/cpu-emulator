@@ -32,10 +32,22 @@ func getBusLength() int {
 	}
 }
 
+func getFrequency() int {
+	var vl int
+
+	fmt.Println("Qual a frequencia em Mhz: ")
+
+	for {
+		fmt.Scanf("%d", &vl)
+		return vl
+	}
+}
+
 func main() {
 
 	bus := getBusLength()
 	word := getWordLengh()
+	frequency := getFrequency()
 
 	fmt.Println("")
 	fmt.Println("-----------------------")
@@ -45,5 +57,5 @@ func main() {
 	fmt.Println("Log: VM Started")
 	fmt.Println("")
 
-	vm.Start([]string{"A", "B", "C", "D", "E"}, bus, word, 1024)
+	vm.Start([]string{"A", "B", "C", "D", "E"}, bus, word, 1024, frequency)
 }

@@ -60,7 +60,7 @@ func NewEncoder(registers []string, word int) Encoder {
 
 func (encoder *Encoder) encode(key int, action string, params []string) []Msg {
 	payload := encoder.expandValue(int(getAction(action)), CALL)
-	payload = append(payload, encoder.mapParams(params)...)
+	payload = append(payload, encoder.MapParams(params)...)
 
 	for index := range payload {
 		payload[index].Key = key
@@ -93,7 +93,7 @@ func (encoder *Encoder) Parse(codeIndex int, code string) [][]Msg {
 	return exprs
 }
 
-func (encoder *Encoder) mapParams(params []string) []Msg {
+func (encoder *Encoder) MapParams(params []string) []Msg {
 	var prs []Msg
 
 	for _, param := range params {

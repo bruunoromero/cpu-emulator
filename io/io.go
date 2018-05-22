@@ -23,10 +23,10 @@ type Instance interface {
 }
 
 // New returns a new instance of the I/O Module
-func New(registers []string, word int) Instance {
+func New(encoder parser.Encoder) Instance {
 	return &io{
+		encoder: encoder,
 		read:    make(chan []parser.Msg),
-		encoder: parser.NewEncoder(registers, word),
 	}
 }
 

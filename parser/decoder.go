@@ -31,8 +31,10 @@ func NewDecoder(word int) Decoder {
 	}
 }
 
-func makeChunks(size int, arr []Msg) [][]Msg {
+func (decoder *Decoder) MakeChunks(arr []Msg) [][]Msg {
 	var divided [][]Msg
+
+	size := decoder.wordLength / 8
 
 	for i := 0; i < len(arr); i += size {
 		end := i + size
@@ -136,7 +138,7 @@ func (decoder *Decoder) Decode(payload []Msg) Action {
 		Value: value,
 	}
 
-	chunks := makeChunks(numBytes, tmp[numBytes*2:])
+	chunks := decoder.MakeChunks(tmp[numBytes*2:])
 
 	for _, chunk := range chunks {
 		chunkValue := mapSlice(chunk, getValue)
