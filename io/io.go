@@ -51,8 +51,12 @@ func (io *io) Run(bus b.Instance) {
 
 		codeIndex := 0
 		for scanner.Scan() {
-			exprs := io.encoder.Parse(codeIndex, scanner.Text())
-			codeIndex++
+			instructions := io.encoder.ExpandInstruction(scanner.Text())
+			exprs := make([][]parser.Msg, 0)
+			for _, instruction := range instructions {
+				exprs = append(exprs, io.encoder.Parse(codeIndex, instruction)...)
+				codeIndex++
+			}
 
 			for _, expr := range exprs {
 				io.read <- expr

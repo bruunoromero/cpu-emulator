@@ -9,10 +9,18 @@ import (
 
 // This constants represents all possible actions in the cpu
 const (
-	Add = iota
+	GT = iota
+	LT
+	EQ
+	Add
 	Mov
 	Inc
 	Imul
+	Jump
+	NULL
+	GTEQ
+	LTEQ
+	Label
 )
 
 // This constants represents all possible types of messages
@@ -41,10 +49,26 @@ type Msg struct {
 }
 
 var actions = map[string]byte{
-	"mov":  Mov,
-	"add":  Add,
-	"inc":  Inc,
-	"imul": Imul,
+	"EQ":    EQ,
+	"GT":    GT,
+	"LT":    LT,
+	"mov":   Mov,
+	"add":   Add,
+	"inc":   Inc,
+	"JMP":   Jump,
+	"imul":  Imul,
+	"NULL":  NULL,
+	"GTEQ":  GTEQ,
+	"LTEQ":  LTEQ,
+	"label": Label,
+}
+
+var conditionals = map[string]string{
+	"=":  "EQ",
+	">":  "GT",
+	"<":  "LT",
+	">=": "GTEQ",
+	"<=": "LTEQ",
 }
 
 // NewEncoder instanciate an returns an encoder
@@ -71,6 +95,45 @@ func (encoder *Encoder) encode(key int, action string, params []string) []Msg {
 	return payload
 }
 
+func isConditional(line string) bool {
+	for key := range conditionals {
+		if strings.Contains(line, key) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (encoder *Encoder) ExpandInstruction(code string) []string {
+	if isConditional(code) {
+		parts := strings.Split(code, ":")
+
+		if len(parts) != 3 {
+			utils.Abort("Unexpected action")
+		}
+
+		for i, part := range parts {
+			parts[i] = strings.TrimSpace(part)
+		}
+
+		for key, value := range conditionals {
+			if strings.Contains(parts[0], key) {
+				insts := strings.Split(parts[0], key)
+				for i, inst := range insts {
+					insts[i] = strings.TrimSpace(inst)
+				}
+
+				parts[0] = value + " " + insts[0] + ", " + insts[1]
+			}
+		}
+
+		return parts
+	}
+
+	return []string{code}
+}
+
 // Parse parses an string into an matrix of bytes
 func (encoder *Encoder) Parse(codeIndex int, code string) [][]Msg {
 	var exprs [][]Msg
@@ -80,13 +143,15 @@ func (encoder *Encoder) Parse(codeIndex int, code string) [][]Msg {
 		commaReplaced := strings.Replace(line, ",", " ", -1)
 		values := strings.Fields(commaReplaced)
 
-		if len(values) > 1 {
-			action := values[0]
-			params := values[1:len(values)]
+		params := make([]string, 0)
+		action := values[0]
 
-			expr := encoder.encode(codeIndex, action, params)
-			exprs = append(exprs, expr)
+		if len(values) > 1 {
+			params = values[1:len(values)]
 		}
+
+		expr := encoder.encode(codeIndex, action, params)
+		exprs = append(exprs, expr)
 
 	}
 

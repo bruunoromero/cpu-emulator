@@ -14,18 +14,29 @@ import (
 	"github.com/bruunoromero/cpu-emulator/utils"
 )
 
+type cacheable struct {
+	access int
+	value  int
+}
+
 type cpu struct {
-	pi             int
-	memoryOffest   int
-	executionIndex int
-	wordLenth      int
-	frequency      int
-	registers      []int
-	messageQueue   []parser.Msg
-	encoder        parser.Encoder
-	decoder        parser.Decoder
-	memory         memory.Instance
-	executionMap   map[int][]parser.Msg
+	pi                      int
+	memoryOffest            int
+	executionIndex          int
+	wordLenth               int
+	frequency               int
+	lastConditionalIndex    int
+	loopExecuting           int
+	isBuildingLoop          bool
+	isWaitingForConditional bool
+	registers               []int
+	cache                   []cacheable
+	loops                   map[int]loop
+	messageQueue            []parser.Msg
+	encoder                 parser.Encoder
+	decoder                 parser.Decoder
+	memory                  memory.Instance
+	executionMap            map[int][]parser.Msg
 }
 
 // Instance is the interface of the cpu type
@@ -36,20 +47,33 @@ type Instance interface {
 	executeOrAbort(int, func(*int) int) int
 }
 
+type loop struct {
+	condition    parser.Action
+	ifTrue       parser.Action
+	ifFalse      parser.Action
+	instructions []parser.Action
+}
+
 // New returns a new instance of CPU
-func New(registers int, word int, memory int, frequency int, memoryI memory.Instance, encoder parser.Encoder) Instance {
+func New(registers int, word int, memory int, frequency int, memoryI memory.I, encoder parser.Encoder) Instance {
 	return &cpu{
-		executionIndex: 0,
-		pi:             -1,
-		wordLenth:      word,
-		memory:         memoryI,
-		encoder:        encoder,
-		frequency:      frequency,
-		memoryOffest:   (memory / 2) - 1,
-		messageQueue:   make([]parser.Msg, 0),
-		registers:      make([]int, registers),
-		decoder:        parser.NewDecoder(word),
-		executionMap:   make(map[int][]parser.Msg),
+		lastConditionalIndex:    0,
+		executionIndex:          0,
+		loopExecuting:           0,
+		isBuildingLoop:          false,
+		pi:                      -1,
+		wordLenth:               word,
+		isWaitingForConditional: false,
+		memory:                  memoryI,
+		encoder:                 encoder,
+		frequency:               frequency,
+		memoryOffest:            (memory / 2) - 1,
+		loops:                   make(map[int]loop),
+		cache:                   make([]cacheable, 10),
+		messageQueue:            make([]parser.Msg, 0),
+		registers:               make([]int, registers),
+		decoder:                 parser.NewDecoder(word),
+		executionMap:            make(map[int][]parser.Msg),
 	}
 }
 
@@ -81,7 +105,6 @@ func (cpu *cpu) Run(bus b.Instance) {
 			for _, message := range messages {
 				if len(message) > 0 {
 					msg := message[0]
-
 					if msg.Signal == b.READ {
 						if msg.Key != cpu.pi+1 {
 							cpu.messageQueue = append(message, cpu.messageQueue...)
@@ -97,19 +120,7 @@ func (cpu *cpu) Run(bus b.Instance) {
 						}
 
 						instruction := cpu.decoder.Decode(cpu.executionMap[cpu.executionIndex])
-
-						for index, parameter := range instruction.Parameters {
-							if parameter.Type == parser.MEMORY {
-								instruction.Parameters[index] = cpu.resolveParameter(parameter)
-							}
-						}
-
-						switch instruction.Location.Type {
-						case parser.MEMORY:
-							cpu.executeOnMemory(instruction)
-						case parser.REGISTER:
-							cpu.executeOnRegister(instruction)
-						}
+						cpu.executeInstruction(instruction)
 						cpu.executionIndex++
 					}
 				}
@@ -120,14 +131,58 @@ func (cpu *cpu) Run(bus b.Instance) {
 	}()
 }
 
-func (cpu *cpu) resolveParameter(parameter parser.Parameter) parser.Parameter {
-	msg := cpu.memory.Read(byte(parameter.Value + cpu.memoryOffest))
-	bytes := mapSlice(msg, getValue)
-	value := utils.FromBytes(cpu.wordLenth, bytes)
+func (cpu *cpu) shouldExecute(instruction parser.Action) bool {
+	if isConditional(instruction.Action) {
+		loop := cpu.loops[cpu.loopExecuting]
+		loop.condition = instruction
+		cpu.isWaitingForConditional = true
+		cpu.lastConditionalIndex = instruction.Key
+		cpu.loops[cpu.loopExecuting] = loop
+		return false
+	} else if cpu.isWaitingForConditional {
+		if instruction.Key == cpu.lastConditionalIndex+1 {
+			loop := cpu.loops[cpu.loopExecuting]
+			loop.ifTrue = instruction
+			cpu.loops[cpu.loopExecuting] = loop
+			return false
+		} else if instruction.Key == cpu.lastConditionalIndex+2 {
+			loop := cpu.loops[cpu.loopExecuting]
+			cpu.isBuildingLoop = false
+			cpu.isWaitingForConditional = false
+			loop.ifFalse = instruction
+			cpu.loops[cpu.loopExecuting] = loop
+			cpu.branchLoop()
+			return false
+		}
+	}
 
-	return parser.Parameter{
-		Value: value,
-		Type:  parser.LITERAL,
+	return true
+}
+
+func (cpu *cpu) cacheInstructions(instruction parser.Action) {
+	if cpu.isBuildingLoop {
+		loop := cpu.loops[cpu.loopExecuting]
+		loop.instructions = append(loop.instructions, instruction)
+		cpu.loops[cpu.loopExecuting] = loop
+	}
+}
+
+func (cpu *cpu) executeInstruction(instruction parser.Action) {
+	if cpu.shouldExecute(instruction) {
+		cpu.cacheInstructions(instruction)
+
+		for index, parameter := range instruction.Parameters {
+			if parameter.Type == parser.MEMORY {
+				instruction.Parameters[index] = cpu.resolveParameter(parameter)
+			}
+		}
+
+		switch instruction.Location.Type {
+		case parser.MEMORY:
+			cpu.executeOnMemory(instruction)
+		default:
+			cpu.executeOnRegister(instruction)
+		}
 	}
 }
 
@@ -141,9 +196,66 @@ func (cpu *cpu) executeOnRegister(instruction parser.Action) {
 		cpu.mov(instruction.Location, instruction.Parameters)
 	case parser.Imul:
 		cpu.imul(instruction.Location, instruction.Parameters)
+	case parser.Label:
+		cpu.label(instruction.Location)
+	case parser.Jump:
+		cpu.jump(instruction.Location)
+	case parser.NULL:
+		cpu.loopExecuting = -1
 	}
 
 	fmt.Println("registers", cpu.registers)
+}
+
+func isConditional(action int) bool {
+	return action == parser.EQ ||
+		action == parser.GT ||
+		action == parser.LT ||
+		action == parser.GTEQ ||
+		action == parser.LTEQ
+}
+
+func (cpu *cpu) branchLoop() {
+	loop := cpu.loops[cpu.loopExecuting]
+
+	if cpu.executeCondition() {
+		cpu.executeInstruction(loop.ifTrue)
+	} else {
+		cpu.executeInstruction(loop.ifFalse)
+	}
+}
+
+func (cpu *cpu) executeLoop() {
+	loop := cpu.loops[cpu.loopExecuting]
+
+	for _, instruction := range loop.instructions {
+		cpu.executeInstruction(instruction)
+	}
+
+	cpu.branchLoop()
+}
+
+func (cpu *cpu) executeCondition() bool {
+	condition := cpu.loops[cpu.loopExecuting].condition
+	left := condition.Location
+	right := condition.Parameters[0]
+
+	leftValue := cpu.extractValue(left)
+	rightValue := cpu.extractValue(right)
+
+	if condition.Action == parser.EQ {
+		return leftValue == rightValue
+	} else if condition.Action == parser.GT {
+		return leftValue > rightValue
+	} else if condition.Action == parser.LT {
+		return leftValue < rightValue
+	} else if condition.Action == parser.GTEQ {
+		return leftValue >= rightValue
+	} else if condition.Action == parser.LTEQ {
+		return leftValue <= rightValue
+	}
+
+	return false
 }
 
 func (cpu *cpu) executeOnMemory(instruction parser.Action) {
@@ -194,17 +306,33 @@ func (cpu *cpu) extractValue(value parser.Parameter) int {
 		return cpu.get(value)
 	} else if value.Type == parser.LITERAL {
 		return value.Value
+	} else if value.Type == parser.MEMORY {
+		return cpu.resolveParameter(value).Value
 	}
 
 	utils.Abort("undefined type")
 	return 0
 }
 
+func (cpu *cpu) jump(label parser.Parameter) {
+	cpu.isBuildingLoop = false
+	cpu.loopExecuting = cpu.extractValue(label)
+	cpu.executeLoop()
+}
+
+func (cpu *cpu) label(label parser.Parameter) {
+	loopIndex := cpu.extractValue(label)
+	cpu.isBuildingLoop = true
+	cpu.loopExecuting = loopIndex
+	cpu.loops[loopIndex] = loop{
+		instructions: make([]parser.Action, 0),
+	}
+}
+
 func (cpu *cpu) mov(register parser.Parameter, params []parser.Parameter) {
 	checkLengthOrAbort(params, 1, func() {
 		value := params[0]
 		cpu.set(register, cpu.extractValue(value))
-
 	})
 }
 
@@ -287,4 +415,15 @@ func (cpu *cpu) executeOrAbort(register int, callback func(*int) int) int {
 	}
 
 	return -1
+}
+
+func (cpu *cpu) resolveParameter(parameter parser.Parameter) parser.Parameter {
+	msg := cpu.memory.Read(byte(parameter.Value + cpu.memoryOffest))
+	bytes := mapSlice(msg, getValue)
+	value := utils.FromBytes(cpu.wordLenth, bytes)
+
+	return parser.Parameter{
+		Value: value,
+		Type:  parser.LITERAL,
+	}
 }

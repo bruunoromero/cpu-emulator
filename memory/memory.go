@@ -25,6 +25,8 @@ type Instance interface {
 	write(int, []parser.Msg) int
 }
 
+type I = Instance
+
 // New returns a new instance of Memory
 func New(size int, wordLength int, frequency int) Instance {
 	wordLengthByte := wordLength / 8

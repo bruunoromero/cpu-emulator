@@ -12,6 +12,7 @@ type Decoder struct {
 
 // Action represents an expression
 type Action struct {
+	Key        int
 	Action     int
 	Signal     int
 	Origin     int
@@ -120,13 +121,19 @@ func (decoder *Decoder) Decode(payload []Msg) Action {
 	numBytes := decoder.wordLength / 8
 
 	actionValue := mapSlice(tmp[:numBytes], getValue)
-	locationValue := mapSlice(tmp[numBytes:numBytes*2], getValue)
+	actionConst := utils.FromBytes(decoder.wordLength, actionValue)
 
 	action := Action{
-		Action: utils.FromBytes(decoder.wordLength, actionValue),
+		Key:    tmp[0].Key,
+		Action: actionConst,
+	}
+
+	if actionConst == NULL {
+		return action
 	}
 
 	msg := tmp[numBytes]
+	locationValue := mapSlice(tmp[numBytes:numBytes*2], getValue)
 	value := utils.FromBytes(decoder.wordLength, locationValue)
 
 	if msg.Type == REGISTER {
