@@ -15,8 +15,8 @@ import (
 )
 
 type cacheable struct {
-	access int
 	value  int
+	access int
 }
 
 type cpu struct {
@@ -27,15 +27,16 @@ type cpu struct {
 	frequency               int
 	lastConditionalIndex    int
 	loopExecuting           int
+	isLooping               bool
 	isBuildingLoop          bool
 	isWaitingForConditional bool
 	registers               []int
-	cache                   []cacheable
 	loops                   map[int]loop
 	messageQueue            []parser.Msg
 	encoder                 parser.Encoder
 	decoder                 parser.Decoder
 	memory                  memory.Instance
+	cache                   map[int]cacheable
 	executionMap            map[int][]parser.Msg
 }
 
@@ -59,9 +60,10 @@ func New(registers int, word int, memory int, frequency int, memoryI memory.I, e
 	return &cpu{
 		lastConditionalIndex:    0,
 		executionIndex:          0,
-		loopExecuting:           0,
-		isBuildingLoop:          false,
+		loopExecuting:           -1,
 		pi:                      -1,
+		isBuildingLoop:          false,
+		isLooping:               false,
 		wordLenth:               word,
 		isWaitingForConditional: false,
 		memory:                  memoryI,
@@ -69,9 +71,9 @@ func New(registers int, word int, memory int, frequency int, memoryI memory.I, e
 		frequency:               frequency,
 		memoryOffest:            (memory / 2) - 1,
 		loops:                   make(map[int]loop),
-		cache:                   make([]cacheable, 10),
 		messageQueue:            make([]parser.Msg, 0),
 		registers:               make([]int, registers),
+		cache:                   make(map[int]cacheable),
 		decoder:                 parser.NewDecoder(word),
 		executionMap:            make(map[int][]parser.Msg),
 	}
@@ -167,6 +169,10 @@ func (cpu *cpu) cacheInstructions(instruction parser.Action) {
 	}
 }
 
+func (cpu *cpu) syncCache() {
+
+}
+
 func (cpu *cpu) executeInstruction(instruction parser.Action) {
 	if cpu.shouldExecute(instruction) {
 		cpu.cacheInstructions(instruction)
@@ -179,7 +185,11 @@ func (cpu *cpu) executeInstruction(instruction parser.Action) {
 
 		switch instruction.Location.Type {
 		case parser.MEMORY:
-			cpu.executeOnMemory(instruction)
+			if cpu.isLooping {
+				cpu.executeOnCache(instruction)
+			} else {
+				cpu.executeOnMemory(instruction)
+			}
 		default:
 			cpu.executeOnRegister(instruction)
 		}
@@ -201,10 +211,23 @@ func (cpu *cpu) executeOnRegister(instruction parser.Action) {
 	case parser.Jump:
 		cpu.jump(instruction.Location)
 	case parser.NULL:
-		cpu.loopExecuting = -1
+		cpu.null()
 	}
 
 	fmt.Println("registers", cpu.registers)
+}
+
+func (cpu *cpu) executeOnCache(instruction parser.Action) {
+	switch instruction.Action {
+	case parser.Inc:
+		cpu.incOnCache(instruction.Location)
+	case parser.Add:
+		cpu.addOnCache(instruction.Location, instruction.Parameters)
+	case parser.Mov:
+		cpu.movOnCache(instruction.Location, instruction.Parameters)
+	case parser.Imul:
+		cpu.imulOnCache(instruction.Location, instruction.Parameters)
+	}
 }
 
 func isConditional(action int) bool {
@@ -217,8 +240,11 @@ func isConditional(action int) bool {
 
 func (cpu *cpu) branchLoop() {
 	loop := cpu.loops[cpu.loopExecuting]
+	isTrue := cpu.executeCondition()
 
-	if cpu.executeCondition() {
+	cpu.isLooping = false
+
+	if isTrue {
 		cpu.executeInstruction(loop.ifTrue)
 	} else {
 		cpu.executeInstruction(loop.ifFalse)
@@ -307,6 +333,24 @@ func (cpu *cpu) extractValue(value parser.Parameter) int {
 	} else if value.Type == parser.LITERAL {
 		return value.Value
 	} else if value.Type == parser.MEMORY {
+		if cpu.isLooping {
+			if cacheValue, ok := cpu.cache[value.Value]; ok {
+				cacheValue.access++
+				cpu.cache[value.Value] = cacheValue
+
+				return cacheValue.value
+			}
+
+			v := value.Value
+
+			cpu.cache[v] = cacheable{
+				access: 1,
+				value:  v,
+			}
+
+			return v
+		}
+
 		return cpu.resolveParameter(value).Value
 	}
 
@@ -315,13 +359,20 @@ func (cpu *cpu) extractValue(value parser.Parameter) int {
 }
 
 func (cpu *cpu) jump(label parser.Parameter) {
+	cpu.isLooping = true
 	cpu.isBuildingLoop = false
 	cpu.loopExecuting = cpu.extractValue(label)
 	cpu.executeLoop()
 }
 
+func (cpu *cpu) null() {
+	cpu.isLooping = false
+	cpu.loopExecuting = -1
+}
+
 func (cpu *cpu) label(label parser.Parameter) {
 	loopIndex := cpu.extractValue(label)
+	cpu.isLooping = true
 	cpu.isBuildingLoop = true
 	cpu.loopExecuting = loopIndex
 	cpu.loops[loopIndex] = loop{
@@ -392,6 +443,57 @@ func (cpu *cpu) incOnMemory(memory parser.Parameter) {
 	message := cpu.encoder.MapParams([]string{strconv.Itoa(value)})
 	fmt.Println("inc on memory position: ", memory.Value+cpu.memoryOffest, "; value: ", message)
 	cpu.memory.Write(byte(memory.Value+cpu.memoryOffest), message)
+}
+
+func (cpu *cpu) movOnCache(cache parser.Parameter, params []parser.Parameter) {
+	checkLengthOrAbort(params, 1, func() {
+		cpu.extractValue(cache)
+
+		value := cpu.extractValue(params[0])
+
+		cacheEl := cpu.cache[cache.Value]
+		cacheEl.value = value
+		cpu.cache[cache.Value] = cacheEl
+		fmt.Println("mov on cache position: ", cache.Value, "; value: ", cacheEl.value)
+	})
+}
+
+func (cpu *cpu) addOnCache(cache parser.Parameter, params []parser.Parameter) {
+	checkLengthOrAbort(params, 1, func() {
+		value := cpu.extractValue(cache) + cpu.extractValue(params[0])
+
+		cacheEl := cpu.cache[cache.Value]
+		cacheEl.value = value
+		cpu.cache[cache.Value] = cacheEl
+
+		fmt.Println("add on cache position: ", cache.Value, "; value: ", cacheEl.value)
+	})
+}
+
+func (cpu *cpu) imulOnCache(cache parser.Parameter, params []parser.Parameter) {
+	checkLengthOrAbort(params, 2, func() {
+		cpu.extractValue(cache)
+
+		v0 := cpu.extractValue(params[0])
+		v1 := cpu.extractValue(params[1])
+		value := v0 * v1
+
+		cacheEl := cpu.cache[cache.Value]
+		cacheEl.value = value
+		cpu.cache[cache.Value] = cacheEl
+		fmt.Println(cpu.cache)
+		fmt.Println("imul on cache position: ", cache.Value, "; value: ", cacheEl.value)
+	})
+}
+
+func (cpu *cpu) incOnCache(cache parser.Parameter) {
+	value := cpu.extractValue(cache) + 1
+
+	cacheEl := cpu.cache[cache.Value]
+	cacheEl.value = value
+	cpu.cache[cache.Value] = cacheEl
+
+	fmt.Println("inc on cache position: ", cache.Value, "; value: ", cacheEl.value)
 }
 
 func (cpu *cpu) set(location parser.Parameter, value int) {
