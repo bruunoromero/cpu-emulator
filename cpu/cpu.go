@@ -8,7 +8,6 @@ import (
 	"github.com/bruunoromero/cpu-emulator/memory"
 
 	"github.com/bradfitz/slice"
-
 	b "github.com/bruunoromero/cpu-emulator/bus"
 	"github.com/bruunoromero/cpu-emulator/parser"
 	"github.com/bruunoromero/cpu-emulator/utils"
@@ -163,14 +162,38 @@ func (cpu *cpu) shouldExecute(instruction parser.Action) bool {
 
 func (cpu *cpu) cacheInstructions(instruction parser.Action) {
 	if cpu.isBuildingLoop {
+		cached := parser.Action{
+			Key:        instruction.Key,
+			Signal:     instruction.Signal,
+			Origin:     instruction.Origin,
+			Action:     instruction.Action,
+			Location:   instruction.Location,
+			Parameters: make([]parser.Parameter, 0),
+		}
+
+		for _, parameter := range instruction.Parameters {
+			cached.Parameters = append(cached.Parameters, parser.Parameter{
+				Type:  parameter.Type,
+				Value: parameter.Value,
+			})
+		}
+
 		loop := cpu.loops[cpu.loopExecuting]
-		loop.instructions = append(loop.instructions, instruction)
+		loop.instructions = append(loop.instructions, cached)
 		cpu.loops[cpu.loopExecuting] = loop
 	}
 }
 
 func (cpu *cpu) syncCache() {
+	cpu.lfu()
+}
 
+func (cpu *cpu) lfu() {
+	for position, cache := range cpu.cache {
+		if cache.access >= 5 {
+			cpu.writeToMemory(position, cache.value)
+		}
+	}
 }
 
 func (cpu *cpu) executeInstruction(instruction parser.Action) {
@@ -200,12 +223,16 @@ func (cpu *cpu) executeOnRegister(instruction parser.Action) {
 	switch instruction.Action {
 	case parser.Inc:
 		cpu.add(instruction.Location, []parser.Parameter{parser.Parameter{Type: parser.LITERAL, Value: 1}})
+		fmt.Println("registers", cpu.registers)
 	case parser.Add:
 		cpu.add(instruction.Location, instruction.Parameters)
+		fmt.Println("registers", cpu.registers)
 	case parser.Mov:
 		cpu.mov(instruction.Location, instruction.Parameters)
+		fmt.Println("registers", cpu.registers)
 	case parser.Imul:
 		cpu.imul(instruction.Location, instruction.Parameters)
+		fmt.Println("registers", cpu.registers)
 	case parser.Label:
 		cpu.label(instruction.Location)
 	case parser.Jump:
@@ -213,8 +240,6 @@ func (cpu *cpu) executeOnRegister(instruction parser.Action) {
 	case parser.NULL:
 		cpu.null()
 	}
-
-	fmt.Println("registers", cpu.registers)
 }
 
 func (cpu *cpu) executeOnCache(instruction parser.Action) {
@@ -255,6 +280,7 @@ func (cpu *cpu) executeLoop() {
 	loop := cpu.loops[cpu.loopExecuting]
 
 	for _, instruction := range loop.instructions {
+		cpu.syncCache()
 		cpu.executeInstruction(instruction)
 	}
 
@@ -368,6 +394,7 @@ func (cpu *cpu) jump(label parser.Parameter) {
 func (cpu *cpu) null() {
 	cpu.isLooping = false
 	cpu.loopExecuting = -1
+	cpu.syncCache()
 }
 
 func (cpu *cpu) label(label parser.Parameter) {
@@ -474,6 +501,7 @@ func (cpu *cpu) imulOnCache(cache parser.Parameter, params []parser.Parameter) {
 	checkLengthOrAbort(params, 2, func() {
 		cpu.extractValue(cache)
 
+		fmt.Println(params[0].Type == parser.LITERAL)
 		v0 := cpu.extractValue(params[0])
 		v1 := cpu.extractValue(params[1])
 		value := v0 * v1
@@ -481,8 +509,7 @@ func (cpu *cpu) imulOnCache(cache parser.Parameter, params []parser.Parameter) {
 		cacheEl := cpu.cache[cache.Value]
 		cacheEl.value = value
 		cpu.cache[cache.Value] = cacheEl
-		fmt.Println(cpu.cache)
-		fmt.Println("imul on cache position: ", cache.Value, "; value: ", cacheEl.value)
+		// fmt.Println("imul on cache position: ", cache.Value, "; value: ", cacheEl.value)
 	})
 }
 
@@ -494,6 +521,13 @@ func (cpu *cpu) incOnCache(cache parser.Parameter) {
 	cpu.cache[cache.Value] = cacheEl
 
 	fmt.Println("inc on cache position: ", cache.Value, "; value: ", cacheEl.value)
+}
+
+func (cpu *cpu) writeToMemory(position int, value int) {
+	message := cpu.encoder.MapParams([]string{strconv.Itoa(value)})
+	cpu.memory.Write(byte(position+cpu.memoryOffest), message)
+
+	fmt.Println("write on memory position: ", position+cpu.memoryOffest, "; value: ", message)
 }
 
 func (cpu *cpu) set(location parser.Parameter, value int) {

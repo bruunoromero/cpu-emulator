@@ -39,15 +39,15 @@ func getFrequency() int {
 
 	for {
 		fmt.Scanf("%d", &vl)
-		return vl
+		return int(vl)
 	}
 }
 
 func main() {
 
+	frequency := getFrequency()
 	bus := getBusLength()
 	word := getWordLengh()
-	frequency := getFrequency()
 
 	fmt.Println("")
 	fmt.Println("-----------------------")
