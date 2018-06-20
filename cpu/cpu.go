@@ -192,6 +192,8 @@ func (cpu *cpu) lfu() {
 	for position, cache := range cpu.cache {
 		if cache.access >= 5 {
 			cpu.writeToMemory(position, cache.value)
+			cache.access = 0
+			cpu.cache[position] = cache
 		}
 	}
 }
